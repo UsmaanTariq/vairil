@@ -66,7 +66,7 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { project_id } = body as { project_id: string };
+    const { project_id, otherIdeas } = body as { project_id: string; otherIdeas?: string[] };
 
     if (!project_id) {
       return NextResponse.json({ error: 'project_id required' }, { status: 400 });
@@ -122,14 +122,24 @@ export async function POST(
       ? `\n\nREPLACING THIS IDEA (do NOT reuse its title or hook):\nTitle: "${existingRow.title}"\nTrend: ${existingRow.trend_ref}\nHook: ${existingRow.hook}`
       : '';
 
+    const otherIdeasBlock =
+      otherIdeas && otherIdeas.length > 0
+        ? [
+            ``,
+            `OTHER IDEAS ALREADY ON THE BOARD (this new idea must be clearly different from all of them):`,
+            ...otherIdeas.map((t) => `- ${t}`),
+          ].join('\n')
+        : '';
+
     const input = [
       profileBlock,
       ``,
       `CURRENT TRENDS TO ANCHOR IDEAS TO:`,
       trendsText,
       oldIdeaContext,
+      otherIdeasBlock,
       ``,
-      `Generate 1 fresh idea. Replace {N} in your instructions with 1. Make it distinctly different from the idea being replaced.`,
+      `Generate 1 fresh idea. Replace {N} in your instructions with 1. Make it distinctly different from the idea being replaced and from all other ideas already on the board.`,
     ].join('\n');
 
     const result = await callAgent({

@@ -99,7 +99,10 @@ export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
       const res = await fetch('/api/ideas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId }),
+        body: JSON.stringify({
+          project_id: projectId,
+          previousIdeas: ideas.map((i) => i.title),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate ideas');
@@ -119,7 +122,10 @@ export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
       const res = await fetch(`/api/ideas/${idea.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId }),
+        body: JSON.stringify({
+          project_id: projectId,
+          otherIdeas: ideas.filter((i) => i.id !== idea.id).map((i) => i.title),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate idea');

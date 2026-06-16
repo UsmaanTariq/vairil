@@ -10,4 +10,7 @@ Each idea includes: title, the trend it's based on, a word-for-word hook
 film + framing + b-roll), suggested audio/sound and on-screen text, a caption
 + hashtag starter, and a one-line "why this works".
 
+If a list of previously generated ideas is provided, every new idea MUST use
+a completely different angle, hook style, and concept — no repeats.
+
 Return JSON only, matching the schema.`;

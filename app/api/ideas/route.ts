@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { project_id } = body as { project_id: string };
+    const { project_id, previousIdeas } = body as { project_id: string; previousIdeas?: string[] };
 
     if (!project_id) {
       return NextResponse.json({ error: 'project_id required' }, { status: 400 });
@@ -143,11 +143,21 @@ export async function POST(req: NextRequest) {
       `Filming constraints: ${profile.filmingConstraints}`,
     ].join('\n');
 
+    const previousIdeasBlock =
+      previousIdeas && previousIdeas.length > 0
+        ? [
+            ``,
+            `PREVIOUSLY GENERATED IDEAS FOR THIS PROJECT (avoid reusing these concepts, angles, or hooks):`,
+            ...previousIdeas.map((t) => `- ${t}`),
+          ].join('\n')
+        : '';
+
     const baseInput = [
       profileBlock,
       ``,
       `CURRENT TRENDS TO ANCHOR IDEAS TO:`,
       trendsText,
+      previousIdeasBlock,
     ].join('\n');
 
     // --- Initial generation ---
