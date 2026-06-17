@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { GenerationProgress } from '@/components/generation-progress';
+import { IDEAS_GENERATION_STEPS, RESEARCH_STEPS } from '@/lib/generation-steps';
 
 interface Trend {
   name: string;
@@ -106,19 +108,23 @@ export default function ResearchStage({ projectId, onUpdate }: ResearchProps) {
 
   if (regenerating) {
     return (
-      <div className="py-20 text-center">
-        <p className="text-sm text-neutral-400 animate-pulse">Researching trends…</p>
-        <p className="text-xs text-neutral-400 mt-2">This takes around 20–30 seconds</p>
-      </div>
+      <GenerationProgress
+        active
+        steps={RESEARCH_STEPS}
+        title="Researching trends"
+        estimate="usually 20–30 seconds"
+      />
     );
   }
 
   if (generatingIdeas) {
     return (
-      <div className="py-20 text-center">
-        <p className="text-sm text-neutral-400 animate-pulse">Generating ideas…</p>
-        <p className="text-xs text-neutral-400 mt-2">This takes around 20–30 seconds</p>
-      </div>
+      <GenerationProgress
+        active
+        steps={IDEAS_GENERATION_STEPS}
+        title="Generating content ideas"
+        estimate="usually 45–90 seconds"
+      />
     );
   }
 

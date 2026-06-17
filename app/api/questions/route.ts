@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
       schema: QuestionsOutputSchema,
       tools: [questionsTool],
       toolChoice: { type: 'tool', name: 'return_questions' },
+      temperature: 0.2,
     });
 
     await supabase.from('answers').delete().eq('project_id', project_id);

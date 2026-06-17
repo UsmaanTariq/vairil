@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
       schema: ProfileSchema,
       tools: [synthesisTool],
       toolChoice: { type: 'tool', name: 'return_profile' },
+      temperature: 0.2,
     });
 
     // Store the full Q+A in answers table so regeneration can reuse them

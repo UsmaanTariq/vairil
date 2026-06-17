@@ -148,6 +148,7 @@ export async function POST(
       schema: IdeasOutputSchema,
       tools: [returnIdeasTool],
       toolChoice: { type: 'tool', name: 'return_ideas' },
+      temperature: 0.9,
     });
 
     const newIdea = result.ideas[0];

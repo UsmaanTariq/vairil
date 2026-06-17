@@ -146,7 +146,11 @@ export async function POST(req: NextRequest) {
       )
       .join('\n\n');
 
+    const todayIso = new Date().toISOString().slice(0, 10);
+
     const input = [
+      `Today is ${todayIso}. Focus on trends active in the last 30–60 days.`,
+      ``,
       `BUSINESS PROFILE:`,
       `Description: ${profile.description}`,
       `Audience: ${profile.audience}`,
@@ -163,6 +167,7 @@ export async function POST(req: NextRequest) {
       schema: TrendsOutputSchema,
       tools: [returnTrendsTool],
       toolChoice: { type: 'tool', name: 'return_trends' },
+      temperature: 0.2,
     });
 
     // Upsert: delete old, insert fresh

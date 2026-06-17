@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { GenerationProgress } from '@/components/generation-progress';
+import { IDEAS_GENERATION_STEPS, IDEAS_REGEN_ONE_STEPS } from '@/lib/generation-steps';
 
 interface Idea {
   id: string;
@@ -30,44 +32,6 @@ interface IdeasProps {
   onUpdate: (updated: { status: string }) => void;
 }
 
-const LOADING_STEPS = [
-  { label: 'Generating ideas…', after: 0 },
-  { label: 'Running quality check…', after: 22000 },
-  { label: 'Refining any weak ideas…', after: 45000 },
-];
-
-const REGEN_STEPS = [
-  { label: 'Generating replacement…', after: 0 },
-  { label: 'Almost there…', after: 15000 },
-];
-
-function useLoadingStep(active: boolean, steps: typeof LOADING_STEPS) {
-  const [stepIdx, setStepIdx] = useState(0);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  useEffect(() => {
-    if (!active) {
-      timers.current.forEach(clearTimeout);
-      timers.current = [];
-      setStepIdx(0);
-      return;
-    }
-
-    steps.forEach((step, i) => {
-      if (step.after === 0) return;
-      const t = setTimeout(() => setStepIdx(i), step.after);
-      timers.current.push(t);
-    });
-
-    return () => {
-      timers.current.forEach(clearTimeout);
-      timers.current = [];
-    };
-  }, [active, steps]);
-
-  return steps[stepIdx].label;
-}
-
 export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [meta, setMeta] = useState<GenerateMeta | null>(null);
@@ -77,9 +41,6 @@ export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [finalising, setFinalising] = useState(false);
   const [error, setError] = useState('');
-
-  const loadingLabel = useLoadingStep(regenerating, LOADING_STEPS);
-  const regenLabel = useLoadingStep(regeneratingId !== null, REGEN_STEPS);
 
   useEffect(() => {
     fetch(`/api/ideas?project_id=${projectId}`)
@@ -199,10 +160,12 @@ export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
 
   if (regenerating) {
     return (
-      <div className="py-20 text-center space-y-2">
-        <p className="text-sm text-neutral-400 animate-pulse">{loadingLabel}</p>
-        <p className="text-xs text-neutral-500">This takes around 45–90 seconds</p>
-      </div>
+      <GenerationProgress
+        active
+        steps={IDEAS_GENERATION_STEPS}
+        title="Regenerating content ideas"
+        estimate="usually 45–90 seconds"
+      />
     );
   }
 
@@ -287,8 +250,14 @@ export default function IdeasStage({ projectId, onUpdate }: IdeasProps) {
                 </CardHeader>
 
                 {isRegeneratingThis ? (
-                  <CardContent className="py-10 text-center">
-                    <p className="text-sm text-neutral-400 animate-pulse">{regenLabel}</p>
+                  <CardContent>
+                    <GenerationProgress
+                      active
+                      steps={IDEAS_REGEN_ONE_STEPS}
+                      title="Regenerating idea"
+                      estimate="usually 15–30 seconds"
+                      compact
+                    />
                   </CardContent>
                 ) : (
                   <CardContent className="space-y-5 text-sm">

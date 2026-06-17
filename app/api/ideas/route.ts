@@ -167,6 +167,7 @@ export async function POST(req: NextRequest) {
       schema: IdeasOutputSchema,
       tools: [returnIdeasTool],
       toolChoice: { type: 'tool', name: 'return_ideas' },
+      temperature: 0.9,
     });
 
     let currentIdeas: Idea[] = initialResult.ideas;
@@ -200,6 +201,7 @@ export async function POST(req: NextRequest) {
         schema: CriticOutputSchema,
         tools: [returnCritiqueTool],
         toolChoice: { type: 'tool', name: 'return_critique' },
+        temperature: 0.2,
       });
 
       criticRounds++;
@@ -216,12 +218,21 @@ export async function POST(req: NextRequest) {
         )
         .join('\n\n');
 
+      const rejectedTitles = new Set(rejected.map((r) => r.ideaTitle));
+      const keptIdeas = currentIdeas.filter((idea) => !rejectedTitles.has(idea.title));
+      const keptIdeasBlock =
+        keptIdeas.length > 0
+          ? `\nKEPT IDEAS (replacement ideas must differ in angle and hook from all of these):\n` +
+            keptIdeas.map((i) => `- "${i.title}" — Hook: ${i.hook}`).join('\n')
+          : '';
+
       const regenerateInput = [
         baseInput,
         ``,
         `REJECTED IDEAS — feedback below. Generate ${rejected.length} replacement idea${rejected.length !== 1 ? 's' : ''} that fix these issues. Do NOT reuse the rejected titles.`,
         ``,
         feedbackBlock,
+        keptIdeasBlock,
         ``,
         `Replace {N} in your instructions with ${rejected.length}.`,
       ].join('\n');
@@ -232,10 +243,10 @@ export async function POST(req: NextRequest) {
         schema: IdeasOutputSchema,
         tools: [returnIdeasTool],
         toolChoice: { type: 'tool', name: 'return_ideas' },
+        temperature: 0.9,
       });
 
       // Splice replacements in — preserve positions of kept ideas
-      const rejectedTitles = new Set(rejected.map((r) => r.ideaTitle));
       let replacementIdx = 0;
 
       currentIdeas = currentIdeas.map((idea) => {

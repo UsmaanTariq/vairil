@@ -9,5 +9,4 @@ Rules:
   personality, content goals (awareness/footfall/sales/followers), filming
   constraints (on-camera comfort, who films, gear, location, budget), and
   what's already been tried + how it performed.
-- Each question must be specific to THIS business, not generic.
-- Return JSON only, matching the provided schema.`;
+- Each question must be specific to THIS business, not generic.`;

@@ -17,12 +17,14 @@ export async function callAgent<T>({
   schema,
   tools,
   toolChoice,
+  temperature,
 }: {
   system: string;
   input: string;
   schema: z.ZodSchema<T>;
   tools?: Tool[];
   toolChoice?: ToolChoice;
+  temperature?: number;
 }): Promise<T> {
   const res = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
@@ -30,6 +32,7 @@ export async function callAgent<T>({
     system,
     ...(tools ? { tools } : {}),
     ...(toolChoice ? { tool_choice: toolChoice } : {}),
+    ...(temperature !== undefined ? { temperature } : {}),
     messages: [{ role: 'user', content: input }],
   });
 

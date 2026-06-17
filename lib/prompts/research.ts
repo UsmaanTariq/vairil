@@ -8,8 +8,8 @@ in the client's niche.
 Your job:
 - Read across all results to spot recurring trend signals.
 - Deduplicate: if the same trend appears in multiple results, merge them into one entry.
-- Keep the 6–10 most relevant, highest-confidence trends for this specific business.
-- Prefer results with a recent date; treat undated results as lower confidence.
+- Keep up to 10 of the most relevant, highest-confidence trends. Quality over quantity — fewer strong trends beat more weak ones.
+- Today's date is provided in the input. Treat anything older than 60 days as lower confidence; treat undated results as lower confidence.
 
 For each trend return: name, description, platform (tiktok / instagram / both), format type
 (talking-head / transition / POV / listicle / green-screen / duet / etc.), associated audio or
