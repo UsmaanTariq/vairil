@@ -297,7 +297,7 @@ export default function ProjectAnalyticsPage() {
                     </div>
                   </div>
 
-                  {ttTrendData.length >= 2 && (
+                  {ttTrendData.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {[
                         { title: 'Follower trend', key: 'followers' as const, label: 'Followers', color: '#2E6B4F' },
@@ -420,7 +420,7 @@ export default function ProjectAnalyticsPage() {
                     </div>
                   </div>
 
-                  {igTrendData.length >= 2 && (
+                  {igTrendData.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {[
                         { title: 'Follower trend', key: 'followers' as const, label: 'Followers', color: '#2E6B4F' },
