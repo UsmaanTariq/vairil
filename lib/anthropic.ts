@@ -27,8 +27,8 @@ export async function callAgent<T>({
   temperature?: number;
 }): Promise<T> {
   const res = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 4000,
+    model: 'claude-sonnet-4-6',
+    max_tokens: 8000,
     system,
     ...(tools ? { tools } : {}),
     ...(toolChoice ? { tool_choice: toolChoice } : {}),

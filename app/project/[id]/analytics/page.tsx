@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -62,10 +62,14 @@ export default function ProjectAnalyticsPage() {
   const [data, setData]       = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  const [ttSort, setTtSort]   = useState<TtSortKey>('views');
-  const [ttDir, setTtDir]     = useState<'asc' | 'desc'>('desc');
-  const [igSort, setIgSort]   = useState<IgSortKey>('views');
-  const [igDir, setIgDir]     = useState<'asc' | 'desc'>('desc');
+  const [ttSort, setTtSort]       = useState<TtSortKey>('views');
+  const [ttDir, setTtDir]         = useState<'asc' | 'desc'>('desc');
+  const [igSort, setIgSort]       = useState<IgSortKey>('views');
+  const [igDir, setIgDir]         = useState<'asc' | 'desc'>('desc');
+  const [ttRefreshing, setTtRefreshing] = useState(false);
+  const [igRefreshing, setIgRefreshing] = useState(false);
+  const [ttRefreshErr, setTtRefreshErr] = useState('');
+  const [igRefreshErr, setIgRefreshErr] = useState('');
 
   useEffect(() => {
     fetch(`/api/projects/${id}/analytics`)
@@ -138,6 +142,36 @@ export default function ProjectAnalyticsPage() {
     else { setIgSort(key); setIgDir('desc'); }
   }
 
+  async function refreshTikTok() {
+    const accountId = data?.tiktok?.account_id;
+    if (!accountId) return;
+    setTtRefreshing(true);
+    setTtRefreshErr('');
+    try {
+      const res = await fetch(`/api/tiktok/accounts/${accountId}/refresh`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { setTtRefreshErr(d.error ?? 'Refresh failed'); return; }
+      const refreshed = await fetch(`/api/projects/${id}/analytics`).then((r) => r.json());
+      if (!refreshed.error) setData(refreshed);
+    } catch { setTtRefreshErr('Network error'); }
+    finally { setTtRefreshing(false); }
+  }
+
+  async function refreshInstagram() {
+    const accountId = data?.instagram?.account_id;
+    if (!accountId) return;
+    setIgRefreshing(true);
+    setIgRefreshErr('');
+    try {
+      const res = await fetch(`/api/instagram/accounts/${accountId}/refresh`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { setIgRefreshErr(d.error ?? 'Refresh failed'); return; }
+      const refreshed = await fetch(`/api/projects/${id}/analytics`).then((r) => r.json());
+      if (!refreshed.error) setData(refreshed);
+    } catch { setIgRefreshErr('Network error'); }
+    finally { setIgRefreshing(false); }
+  }
+
   const card = 'bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]';
 
   return (
@@ -182,7 +216,17 @@ export default function ProjectAnalyticsPage() {
         {/* TikTok section */}
         {data?.tiktok && (
           <div className="flex flex-col gap-4">
-            <h2 className="text-[16px] font-bold text-[#16181A]">TikTok</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-bold text-[#16181A]">TikTok</h2>
+              <div className="flex items-center gap-2">
+                {ttRefreshErr && <p className="text-[12px] text-red-500">{ttRefreshErr}</p>}
+                <button onClick={refreshTikTok} disabled={ttRefreshing}
+                  className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#E8E9E6] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 text-[#7C8278] text-[12px] font-medium transition-colors">
+                  <RefreshCw size={12} className={ttRefreshing ? 'animate-spin' : ''} />
+                  {ttRefreshing ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
             <div className={card}>
               <div className="flex gap-6 flex-wrap">
                 {[
@@ -258,7 +302,17 @@ export default function ProjectAnalyticsPage() {
         {/* Instagram section */}
         {data?.instagram && (
           <div className="flex flex-col gap-4">
-            <h2 className="text-[16px] font-bold text-[#16181A]">Instagram</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-bold text-[#16181A]">Instagram</h2>
+              <div className="flex items-center gap-2">
+                {igRefreshErr && <p className="text-[12px] text-red-500">{igRefreshErr}</p>}
+                <button onClick={refreshInstagram} disabled={igRefreshing}
+                  className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#E8E9E6] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 text-[#7C8278] text-[12px] font-medium transition-colors">
+                  <RefreshCw size={12} className={igRefreshing ? 'animate-spin' : ''} />
+                  {igRefreshing ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
             <div className={card}>
               <div className="flex gap-6 flex-wrap">
                 {[
