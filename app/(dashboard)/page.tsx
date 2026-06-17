@@ -207,7 +207,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Nav group */}
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col gap-1">
               <p className="text-[11px] font-semibold text-[#9A9AAE] uppercase tracking-[0.08em] px-3 mb-2">
                 Workspace
               </p>
@@ -215,6 +215,13 @@ export default function DashboardPage() {
                 <LayoutDashboard size={20} className="text-[#6C5CE7] shrink-0" />
                 <span className="text-[13px] font-semibold text-[#6C5CE7]">Dashboard</span>
               </div>
+              <button
+                onClick={() => router.push('/accounts')}
+                className="flex items-center gap-3 h-11 px-3 rounded-xl text-[#6B6B80] hover:bg-[#F5F6FA] transition-colors w-full text-left"
+              >
+                <Users size={20} className="shrink-0" />
+                <span className="text-[13px] font-medium">Accounts</span>
+              </button>
             </div>
 
             {/* Footer: new project */}
