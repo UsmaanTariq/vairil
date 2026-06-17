@@ -29,6 +29,11 @@ export async function POST(
     );
   }
 
+  // Persist profile pic URL on the account record (best-effort)
+  if (profile.profile_pic_url) {
+    await supabase.from('tiktok_accounts').update({ profile_pic_url: profile.profile_pic_url }).eq('id', id);
+  }
+
   const { data: snapshot, error: insertError } = await supabase
     .from('tiktok_snapshots')
     .insert({

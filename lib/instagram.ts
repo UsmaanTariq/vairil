@@ -1,7 +1,8 @@
 export interface InstagramProfile {
-  followers:  number;
-  post_count: number;
-  user_id:    string;
+  followers:       number;
+  post_count:      number;
+  user_id:         string;
+  profile_pic_url: string | null;
 }
 
 export interface InstagramPostStat {
@@ -11,6 +12,7 @@ export interface InstagramPostStat {
   likes:           number;
   comments:        number;
   engagement_rate: number;
+  thumbnail_url:   string | null;
 }
 
 const BASE = `https://${process.env.RAPIDAPI_INSTAGRAM_HOST}`;
@@ -45,9 +47,10 @@ export async function getProfile(handle: string): Promise<InstagramProfile> {
   const userId = await fetchNumericId(handle);
   const data   = await fetchProfileData(userId);
   return {
-    followers:  (data.edge_followed_by as Record<string, number>)?.count  ?? 0,
-    post_count: (data.edge_owner_to_timeline_media as Record<string, number>)?.count ?? 0,
-    user_id:    String(data.id ?? userId),
+    followers:       (data.edge_followed_by as Record<string, number>)?.count  ?? 0,
+    post_count:      (data.edge_owner_to_timeline_media as Record<string, number>)?.count ?? 0,
+    user_id:         String(data.id ?? userId),
+    profile_pic_url: (data.profile_pic_url_hd ?? data.profile_pic_url ?? null) as string | null,
   };
 }
 
@@ -73,12 +76,13 @@ export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
       : 0;
 
     return {
-      post_id:  String(node.shortcode ?? node.id ?? ''),
-      caption:  [...caption].slice(0, 300).join(''),
+      post_id:       String(node.shortcode ?? node.id ?? ''),
+      caption:       [...caption].slice(0, 300).join(''),
       views,
       likes,
       comments,
       engagement_rate,
+      thumbnail_url: (node.display_url ?? node.thumbnail_src ?? null) as string | null,
     };
   });
 }

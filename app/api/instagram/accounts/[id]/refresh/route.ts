@@ -33,6 +33,11 @@ export async function POST(
     // Sanitize through JSON round-trip to catch any non-serialisable values
     const safePosts = JSON.parse(JSON.stringify(posts ?? []));
 
+    // Persist profile pic URL on the account record (best-effort)
+    if (profile.profile_pic_url) {
+      await supabase.from('instagram_accounts').update({ profile_pic_url: profile.profile_pic_url }).eq('id', id);
+    }
+
     const { data: snapshot, error: insertError } = await supabase
       .from('instagram_snapshots')
       .insert({

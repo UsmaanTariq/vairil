@@ -15,6 +15,7 @@ interface PostStat {
   likes:           number;
   comments:        number;
   engagement_rate: number;
+  thumbnail_url:   string | null;
 }
 
 interface VideoStat {
@@ -25,6 +26,7 @@ interface VideoStat {
   comments:        number;
   shares:          number;
   engagement_rate: number;
+  thumbnail_url:   string | null;
 }
 
 interface SnapshotBase { id: string; fetched_at: string; followers: number }
@@ -34,6 +36,7 @@ interface InstagramSnapshot extends SnapshotBase { post_count:  number; posts?: 
 interface AnalyticsData {
   tiktok:    { account_id: string; handle: string | null; latest_snapshot: TikTokSnapshot | null;    snapshots: TikTokSnapshot[]    } | null;
   instagram: { account_id: string; latest_snapshot: InstagramSnapshot | null; snapshots: InstagramSnapshot[] } | null;
+  handles:   { tiktok: string | null; instagram: string | null };
 }
 
 function fmt(n: number | null) {
@@ -72,6 +75,12 @@ export default function ProjectAnalyticsPage() {
   const [igRefreshing, setIgRefreshing] = useState(false);
   const [ttRefreshErr, setTtRefreshErr] = useState('');
   const [igRefreshErr, setIgRefreshErr] = useState('');
+  const [ttHandle, setTtHandle]         = useState('');
+  const [igHandle, setIgHandle]         = useState('');
+  const [ttLinking, setTtLinking]       = useState(false);
+  const [igLinking, setIgLinking]       = useState(false);
+  const [ttLinkErr, setTtLinkErr]       = useState('');
+  const [igLinkErr, setIgLinkErr]       = useState('');
 
   useEffect(() => {
     fetch(`/api/projects/${id}/analytics`)
@@ -112,6 +121,40 @@ export default function ProjectAnalyticsPage() {
       if (!refreshed.error) setData(refreshed);
     } catch { setIgRefreshErr('Network error'); }
     finally { setIgRefreshing(false); }
+  }
+
+  async function linkTikTok() {
+    const handle = ttHandle.replace(/^@/, '').trim();
+    if (!handle) return;
+    setTtLinking(true); setTtLinkErr('');
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tiktok_handle: handle }),
+      });
+      if (!res.ok) { setTtLinkErr('Failed to save handle'); return; }
+      const refreshed = await fetch(`/api/projects/${id}/analytics`).then((r) => r.json());
+      if (!refreshed.error) { setData(refreshed); setTtHandle(''); }
+    } catch { setTtLinkErr('Network error'); }
+    finally { setTtLinking(false); }
+  }
+
+  async function linkInstagram() {
+    const handle = igHandle.replace(/^@/, '').trim();
+    if (!handle) return;
+    setIgLinking(true); setIgLinkErr('');
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instagram_handle: handle }),
+      });
+      if (!res.ok) { setIgLinkErr('Failed to save handle'); return; }
+      const refreshed = await fetch(`/api/projects/${id}/analytics`).then((r) => r.json());
+      if (!refreshed.error) { setData(refreshed); setIgHandle(''); }
+    } catch { setIgLinkErr('Network error'); }
+    finally { setIgLinking(false); }
   }
 
   function toggleTt(key: TtSortKey) {
@@ -176,8 +219,8 @@ export default function ProjectAnalyticsPage() {
   const topTtVideo = [...ttVideos].sort((a, b) => b.views - a.views)[0] ?? null;
   const topIgPost  = [...igPosts].sort((a, b) => b.likes - a.likes)[0] ?? null;
 
-  const hasTikTok    = Boolean(data?.tiktok);
-  const hasInstagram = Boolean(data?.instagram);
+  const hasTikTok    = Boolean(data?.tiktok    || data?.handles?.tiktok);
+  const hasInstagram = Boolean(data?.instagram || data?.handles?.instagram);
 
   return (
     <div className="min-h-screen bg-[#F3F4F2] dot-grid">
@@ -186,11 +229,11 @@ export default function ProjectAnalyticsPage() {
         {/* Sidebar */}
         <aside className="w-56 shrink-0 sticky top-4 self-start h-[calc(100vh-32px)] bg-white rounded-[20px] flex flex-col overflow-hidden border border-[#E8E9E6] shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col flex-1 p-5">
-            <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-8 h-8 rounded-lg bg-[#1F4D3A] flex items-center justify-center shrink-0">
-                <LayoutDashboard size={16} className="text-white" />
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-11 h-11 rounded-xl bg-[#1F4D3A] flex items-center justify-center shrink-0">
+                <LayoutDashboard size={20} className="text-white" />
               </div>
-              <span className="text-[14px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
+              <span className="text-[16px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
             </div>
             <div className="flex-1 flex flex-col gap-1">
               <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-3 mb-2">Workspace</p>
@@ -271,7 +314,7 @@ export default function ProjectAnalyticsPage() {
               )}
 
               {/* TikTok tab */}
-              {tab === 'tiktok' && hasTikTok && (
+              {tab === 'tiktok' && hasTikTok && data?.tiktok && (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <div className="flex gap-6 flex-wrap">
@@ -394,7 +437,7 @@ export default function ProjectAnalyticsPage() {
               )}
 
               {/* Instagram tab */}
-              {tab === 'instagram' && hasInstagram && (
+              {tab === 'instagram' && hasInstagram && data?.instagram && (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <div className="flex gap-6 flex-wrap">
@@ -521,10 +564,54 @@ export default function ProjectAnalyticsPage() {
                 </div>
               )}
 
+              {/* TikTok tab — handle not yet set */}
+              {tab === 'tiktok' && !data?.handles?.tiktok && (
+                <div className={card}>
+                  <p className="text-[15px] font-semibold text-[#16181A] mb-1">No TikTok account linked</p>
+                  <p className="text-[13px] text-[#7C8278] mb-4">Add a handle to start tracking.</p>
+                  <div className="flex gap-2">
+                    <input value={ttHandle} onChange={(e) => setTtHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkTikTok()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
+                    <button onClick={linkTikTok} disabled={ttLinking || !ttHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{ttLinking ? 'Saving…' : 'Link'}</button>
+                  </div>
+                  {ttLinkErr && <p className="text-[12px] text-red-500 mt-2">{ttLinkErr}</p>}
+                </div>
+              )}
+
+              {/* Instagram tab — handle not yet set */}
+              {tab === 'instagram' && !data?.handles?.instagram && (
+                <div className={card}>
+                  <p className="text-[15px] font-semibold text-[#16181A] mb-1">No Instagram account linked</p>
+                  <p className="text-[13px] text-[#7C8278] mb-4">Add a handle to start tracking.</p>
+                  <div className="flex gap-2">
+                    <input value={igHandle} onChange={(e) => setIgHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkInstagram()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
+                    <button onClick={linkInstagram} disabled={igLinking || !igHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{igLinking ? 'Saving…' : 'Link'}</button>
+                  </div>
+                  {igLinkErr && <p className="text-[12px] text-red-500 mt-2">{igLinkErr}</p>}
+                </div>
+              )}
+
               {!hasTikTok && !hasInstagram && (
-                <div className={`${card} text-center`}>
+                <div className={card}>
                   <p className="text-[15px] font-semibold text-[#16181A] mb-1">No accounts linked</p>
-                  <p className="text-[14px] text-[#7C8278]">Add TikTok or Instagram handles in the project intake to start tracking analytics.</p>
+                  <p className="text-[13px] text-[#7C8278] mb-5">Add a handle to start tracking analytics.</p>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[11px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em]">TikTok handle</p>
+                      <div className="flex gap-2">
+                        <input value={ttHandle} onChange={(e) => setTtHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkTikTok()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
+                        <button onClick={linkTikTok} disabled={ttLinking || !ttHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{ttLinking ? 'Saving…' : 'Link'}</button>
+                      </div>
+                      {ttLinkErr && <p className="text-[12px] text-red-500">{ttLinkErr}</p>}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[11px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em]">Instagram handle</p>
+                      <div className="flex gap-2">
+                        <input value={igHandle} onChange={(e) => setIgHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkInstagram()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
+                        <button onClick={linkInstagram} disabled={igLinking || !igHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{igLinking ? 'Saving…' : 'Link'}</button>
+                      </div>
+                      {igLinkErr && <p className="text-[12px] text-red-500">{igLinkErr}</p>}
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -560,6 +647,14 @@ export default function ProjectAnalyticsPage() {
           {topTtVideo && (
             <div className={card}>
               <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-3">Top TikTok video</p>
+              {topTtVideo.thumbnail_url && (
+                <img
+                  src={topTtVideo.thumbnail_url}
+                  alt=""
+                  className="w-full h-36 object-cover rounded-xl mb-3"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
               <p className="text-[13px] font-medium text-[#16181A] leading-snug mb-3">
                 {topTtVideo.title ? (topTtVideo.title.length > 80 ? topTtVideo.title.slice(0, 80) + '…' : topTtVideo.title) : '—'}
               </p>
@@ -582,6 +677,14 @@ export default function ProjectAnalyticsPage() {
           {topIgPost && (
             <div className={card}>
               <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-3">Top Instagram post</p>
+              {topIgPost.thumbnail_url && (
+                <img
+                  src={topIgPost.thumbnail_url}
+                  alt=""
+                  className="w-full h-36 object-cover rounded-xl mb-3"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
               <p className="text-[13px] font-medium text-[#16181A] leading-snug mb-3">
                 {topIgPost.caption ? (topIgPost.caption.length > 80 ? topIgPost.caption.slice(0, 80) + '…' : topIgPost.caption) : '—'}
               </p>

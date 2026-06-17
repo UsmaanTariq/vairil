@@ -30,11 +30,24 @@ interface Project {
   client_name: string;
   niche: string | null;
   platforms: string[];
+  tiktok_handle: string | null;
+  instagram_handle: string | null;
+  tiktok_followers: number | null;
+  instagram_followers: number | null;
+  tiktok_profile_pic_url: string | null;
+  instagram_profile_pic_url: string | null;
   status: string;
   created_at: string;
   ideas_count: number;
   approved_count: number;
   trends_count: number;
+}
+
+function fmt(n: number | null) {
+  if (n === null) return null;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -203,11 +216,11 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <aside className="w-56 shrink-0 sticky top-4 self-start h-[calc(100vh-32px)] bg-white rounded-[20px] flex flex-col overflow-hidden border border-[#E8E9E6] shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col flex-1 p-5">
-            <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-8 h-8 rounded-lg bg-[#1F4D3A] flex items-center justify-center shrink-0">
-                <LayoutDashboard size={16} className="text-white" />
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-11 h-11 rounded-xl bg-[#1F4D3A] flex items-center justify-center shrink-0">
+                <LayoutDashboard size={20} className="text-white" />
               </div>
-              <span className="text-[14px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
+              <span className="text-[16px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">
@@ -326,13 +339,23 @@ export default function DashboardPage() {
                       className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)] cursor-pointer hover:border-[#3F8F62]/40 hover:shadow-[0_4px_24px_rgba(31,77,58,0.10)] hover:bg-[#FAFBFA] transition-all duration-200 group flex flex-col"
                     >
                       <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="min-w-0">
-                          <p className="text-[15px] font-semibold text-[#16181A] group-hover:text-[#2E6B4F] transition-colors leading-snug">
-                            {p.client_name}
-                          </p>
-                          {p.niche && (
-                            <p className="text-[13px] text-[#7C8278] mt-0.5 truncate">{p.niche}</p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          {p.tiktok_profile_pic_url && (
+                            <img
+                              src={p.tiktok_profile_pic_url}
+                              alt=""
+                              className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-[#E8F2EC]"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
                           )}
+                          <div className="min-w-0">
+                            <p className="text-[15px] font-semibold text-[#16181A] group-hover:text-[#2E6B4F] transition-colors leading-snug">
+                              {p.client_name}
+                            </p>
+                            {p.niche && (
+                              <p className="text-[13px] text-[#7C8278] mt-0.5 truncate">{p.niche}</p>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
@@ -353,13 +376,57 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      {p.platforms?.length > 0 && (
-                        <div className="flex gap-1.5 mb-3">
-                          {p.platforms.map((pl) => (
-                            <span key={pl} className="text-[11px] bg-[#F0F1EE] text-[#7C8278] px-2.5 py-0.5 rounded-full font-medium">
-                              {pl.charAt(0).toUpperCase() + pl.slice(1)}
+                      {(p.tiktok_handle || p.instagram_handle) && (
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                          {p.tiktok_handle && (
+                            <a
+                              href={`https://www.tiktok.com/@${p.tiktok_handle}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E8F2EC] hover:bg-[#D4EAE0] transition-colors"
+                            >
+                              {p.tiktok_profile_pic_url && (
+                                <img
+                                  src={p.tiktok_profile_pic_url}
+                                  alt=""
+                                  className="w-5 h-5 rounded-full object-cover shrink-0"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              )}
+                              <span className="text-[11px] font-semibold text-[#1F4D3A]">TikTok</span>
+                              {p.tiktok_followers !== null && (
+                                <span className="text-[11px] text-[#2E6B4F] font-bold">{fmt(p.tiktok_followers)}</span>
+                              )}
+                            </a>
+                          )}
+                          {p.instagram_handle && (
+                            <a
+                              href={`https://www.instagram.com/${p.instagram_handle}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#EEF2FD] hover:bg-[#DDE6FA] transition-colors"
+                            >
+                              {p.instagram_profile_pic_url && (
+                                <img
+                                  src={p.instagram_profile_pic_url}
+                                  alt=""
+                                  className="w-5 h-5 rounded-full object-cover shrink-0"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              )}
+                              <span className="text-[11px] font-semibold text-[#4B6EC8]">Instagram</span>
+                              {p.instagram_followers !== null && (
+                                <span className="text-[11px] text-[#4B6EC8] font-bold">{fmt(p.instagram_followers)}</span>
+                              )}
+                            </a>
+                          )}
+                          {p.tiktok_followers !== null && p.instagram_followers !== null && (
+                            <span className="text-[11px] text-[#A9AEA4] font-medium">
+                              {fmt((p.tiktok_followers ?? 0) + (p.instagram_followers ?? 0))} combined
                             </span>
-                          ))}
+                          )}
                         </div>
                       )}
 

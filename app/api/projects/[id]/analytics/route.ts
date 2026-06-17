@@ -57,5 +57,12 @@ export async function GET(
 
   const [tiktok, instagram] = await Promise.all([getTikTokData(), getInstagramData()]);
 
-  return NextResponse.json({ tiktok, instagram });
+  return NextResponse.json({
+    tiktok,
+    instagram,
+    handles: {
+      tiktok:    project.tiktok_handle    ?? null,
+      instagram: project.instagram_handle ?? null,
+    },
+  });
 }
