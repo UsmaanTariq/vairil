@@ -25,6 +25,7 @@ export default function AccountsPage() {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [refreshErrors, setRefreshErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch('/api/tiktok/accounts')
@@ -55,11 +56,14 @@ export default function AccountsPage() {
 
   async function handleRefresh(id: string) {
     setRefreshingId(id);
+    setRefreshErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
     try {
       const res = await fetch(`/api/tiktok/accounts/${id}/refresh`, { method: 'POST' });
       const data = await res.json();
-      setRefreshingId(null);
-      if (!res.ok) return;
+      if (!res.ok) {
+        setRefreshErrors((prev) => ({ ...prev, [id]: data.error ?? 'Refresh failed' }));
+        return;
+      }
       setAccounts((prev) =>
         prev.map((a) =>
           a.id === id
@@ -75,7 +79,7 @@ export default function AccountsPage() {
         )
       );
     } catch {
-      // network error or non-JSON response — spinner still stops
+      setRefreshErrors((prev) => ({ ...prev, [id]: 'Network error' }));
     } finally {
       setRefreshingId(null);
     }
@@ -204,14 +208,19 @@ export default function AccountsPage() {
                         {fmtDate(a.latest_snapshot?.fetched_at ?? null)}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleRefresh(a.id)}
-                          disabled={refreshingId === a.id}
-                          className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#ECEDF2] hover:border-[#6C5CE7] hover:text-[#6C5CE7] disabled:opacity-50 text-[#6B6B80] text-[12px] font-medium transition-colors"
-                        >
-                          <RefreshCw size={13} className={refreshingId === a.id ? 'animate-spin' : ''} />
-                          {refreshingId === a.id ? 'Refreshing…' : 'Refresh'}
-                        </button>
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            onClick={() => handleRefresh(a.id)}
+                            disabled={refreshingId === a.id}
+                            className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#ECEDF2] hover:border-[#6C5CE7] hover:text-[#6C5CE7] disabled:opacity-50 text-[#6B6B80] text-[12px] font-medium transition-colors"
+                          >
+                            <RefreshCw size={13} className={refreshingId === a.id ? 'animate-spin' : ''} />
+                            {refreshingId === a.id ? 'Refreshing…' : 'Refresh'}
+                          </button>
+                          {refreshErrors[a.id] && (
+                            <p className="text-[11px] text-red-500 max-w-[200px] text-right">{refreshErrors[a.id]}</p>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

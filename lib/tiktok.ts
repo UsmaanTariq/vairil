@@ -23,7 +23,10 @@ export async function getProfile(handle: string): Promise<TikTokProfile> {
   const res = await fetch(`${BASE}/user/info?unique_id=${encodeURIComponent(handle)}`, {
     headers: HEADERS,
   });
-  if (!res.ok) throw new Error(`TikTok profile fetch failed: ${res.statusText}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`TikTok profile fetch failed (${res.status}): ${body}`);
+  }
   const json = await res.json();
   const stats = json.data?.stats ?? json.userInfo?.stats ?? {};
   return {
