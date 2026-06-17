@@ -15,6 +15,8 @@ interface Project {
   niche: string | null;
   platforms: string[];
   status: string;
+  tiktok_handle:    string | null;
+  instagram_handle: string | null;
 }
 
 interface IntakeProps {
@@ -29,6 +31,8 @@ export default function IntakeStage({ project, onUpdate }: IntakeProps) {
   const [rawText, setRawText] = useState('');
   const [niche, setNiche] = useState(project.niche ?? '');
   const [platforms, setPlatforms] = useState<string[]>(project.platforms ?? []);
+  const [tiktokHandle,    setTiktokHandle]    = useState(project.tiktok_handle    ?? '');
+  const [instagramHandle, setInstagramHandle] = useState(project.instagram_handle ?? '');
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -59,13 +63,15 @@ export default function IntakeStage({ project, onUpdate }: IntakeProps) {
     setSubmitting(true);
 
     try {
-      if (niche || platforms.length) {
+      if (niche || platforms.length || tiktokHandle || instagramHandle) {
+        const tt = tiktokHandle.replace(/^@/, '').trim()    || null;
+        const ig = instagramHandle.replace(/^@/, '').trim() || null;
         await fetch(`/api/projects/${project.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ niche: niche || null, platforms }),
+          body: JSON.stringify({ niche: niche || null, platforms, tiktok_handle: tt, instagram_handle: ig }),
         });
-        onUpdate({ niche: niche || null, platforms });
+        onUpdate({ niche: niche || null, platforms, tiktok_handle: tt, instagram_handle: ig });
       }
 
       const fd = new FormData();
@@ -163,6 +169,30 @@ export default function IntakeStage({ project, onUpdate }: IntakeProps) {
           ))}
         </div>
       </div>
+
+      {platforms.includes('tiktok') && (
+        <div className="space-y-2">
+          <Label htmlFor="tiktok-handle">TikTok handle <span className="text-neutral-400 font-normal">(optional)</span></Label>
+          <Input
+            id="tiktok-handle"
+            placeholder="@handle"
+            value={tiktokHandle}
+            onChange={(e) => setTiktokHandle(e.target.value)}
+          />
+        </div>
+      )}
+
+      {platforms.includes('instagram') && (
+        <div className="space-y-2">
+          <Label htmlFor="instagram-handle">Instagram handle <span className="text-neutral-400 font-normal">(optional)</span></Label>
+          <Input
+            id="instagram-handle"
+            placeholder="@handle"
+            value={instagramHandle}
+            onChange={(e) => setInstagramHandle(e.target.value)}
+          />
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 

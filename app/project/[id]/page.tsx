@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Pencil, ChevronRight } from 'lucide-react';
+import { Pencil, ChevronRight, BarChart2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -70,6 +70,8 @@ interface Project {
   platforms: string[];
   status: string;
   created_at: string;
+  tiktok_handle:    string | null;
+  instagram_handle: string | null;
 }
 
 export default function ProjectPage() {
@@ -228,6 +230,19 @@ export default function ProjectPage() {
                 <span>Business profile</span>
                 <Pencil size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
+            </div>
+          )}
+
+          {/* Analytics link */}
+          {(project.tiktok_handle || project.instagram_handle) && (
+            <div className="px-5 py-3 border-b border-[#F0F1F5]">
+              <Link
+                href={`/project/${id}/analytics`}
+                className="flex items-center gap-2 text-[13px] font-medium text-[#6B6B80] hover:text-[#1B1B2F] transition-colors"
+              >
+                <BarChart2 size={14} />
+                Analytics
+              </Link>
             </div>
           )}
 

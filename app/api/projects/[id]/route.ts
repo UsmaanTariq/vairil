@@ -27,15 +27,35 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
+  const { tiktok_handle: rawTikTok, instagram_handle: rawInstagram, ...rest } = body;
+
+  const tiktok_handle    = rawTikTok    ? String(rawTikTok).replace(/^@/, '').trim()    : undefined;
+  const instagram_handle = rawInstagram ? String(rawInstagram).replace(/^@/, '').trim() : undefined;
+
+  const updatePayload: Record<string, unknown> = { ...rest };
+  if (tiktok_handle    !== undefined) updatePayload.tiktok_handle    = tiktok_handle    || null;
+  if (instagram_handle !== undefined) updatePayload.instagram_handle = instagram_handle || null;
+
   const { data, error } = await supabase
     .from('projects')
-    .update(body)
+    .update(updatePayload)
     .eq('id', id)
     .select()
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (tiktok_handle) {
+    await supabase
+      .from('tiktok_accounts')
+      .upsert({ handle: tiktok_handle, project_id: id }, { onConflict: 'handle' });
+  }
+  if (instagram_handle) {
+    await supabase
+      .from('instagram_accounts')
+      .upsert({ handle: instagram_handle, project_id: id }, { onConflict: 'handle' });
   }
 
   return NextResponse.json({ project: data });

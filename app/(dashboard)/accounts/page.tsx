@@ -94,32 +94,32 @@ export default function AccountsPage() {
     .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-[#0C0D0F] dot-grid">
+    <div className="min-h-screen bg-[#F3F4F2] dot-grid">
       <div className="flex gap-4 p-4 min-h-screen">
 
         {/* Sidebar */}
-        <aside className="w-56 shrink-0 sticky top-4 self-start h-[calc(100vh-32px)] grain bg-[#18191C] rounded-[20px] flex flex-col overflow-hidden border border-[#2C2D33] shadow-[0_8px_40px_rgba(0,0,0,0.6)]">
+        <aside className="w-56 shrink-0 sticky top-4 self-start h-[calc(100vh-32px)] bg-white rounded-[20px] flex flex-col overflow-hidden border border-[#E8E9E6] shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col flex-1 p-5">
             <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-8 h-8 rounded-lg bg-[#AAFF00] flex items-center justify-center shrink-0">
-                <LayoutDashboard size={16} className="text-black" />
+              <div className="w-8 h-8 rounded-lg bg-[#1F4D3A] flex items-center justify-center shrink-0">
+                <LayoutDashboard size={16} className="text-white" />
               </div>
-              <span className="text-[14px] font-bold text-white tracking-tight">TrendForge</span>
+              <span className="text-[14px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
             </div>
             <div className="flex-1 flex flex-col gap-1">
-              <p className="text-[10px] font-semibold text-[#4A4B55] uppercase tracking-[0.1em] px-3 mb-2">
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-3 mb-2">
                 Workspace
               </p>
               <button
                 onClick={() => router.push('/')}
-                className="flex items-center gap-3 h-10 px-3 rounded-xl text-[#8B8C99] hover:bg-[#252629] hover:text-white transition-colors w-full text-left"
+                className="flex items-center gap-3 h-10 px-3 rounded-xl text-[#7C8278] hover:bg-[#F3F4F2] hover:text-[#16181A] transition-colors w-full text-left"
               >
                 <LayoutDashboard size={16} className="shrink-0" />
                 <span className="text-[13px] font-medium">Dashboard</span>
               </button>
-              <div className="flex items-center gap-3 h-10 px-3 rounded-xl bg-[#AAFF00] shadow-[0_0_20px_rgba(170,255,0,0.25)] w-full">
-                <Users size={16} className="text-black shrink-0" />
-                <span className="text-[13px] font-semibold text-black">Accounts</span>
+              <div className="flex items-center gap-3 h-10 px-3 rounded-xl bg-[#EFF6F2] border-l-4 border-[#1F4D3A] w-full">
+                <Users size={16} className="text-[#1F4D3A] shrink-0" />
+                <span className="text-[13px] font-semibold text-[#1F4D3A]">Accounts</span>
               </div>
             </div>
           </div>
@@ -128,13 +128,13 @@ export default function AccountsPage() {
         {/* Main */}
         <main className="flex-1 min-w-0 flex flex-col gap-4">
           <div>
-            <h1 className="text-[22px] font-bold text-white">TikTok Accounts</h1>
-            <p className="text-[13px] text-[#8B8C99] mt-0.5">Track client performance over time</p>
+            <h1 className="text-[22px] font-bold text-[#16181A]">TikTok Accounts</h1>
+            <p className="text-[13px] text-[#7C8278] mt-0.5">Track client performance over time</p>
           </div>
 
           {/* Add account */}
-          <div className="grain bg-[#1E1F23] rounded-[20px] p-5 border border-[#2C2D33] shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <p className="text-[12px] font-semibold text-[#8B8C99] uppercase tracking-[0.08em] mb-3">Add account</p>
+          <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+            <p className="text-[12px] font-semibold text-[#A9AEA4] uppercase tracking-[0.08em] mb-3">Add account</p>
             <div className="flex gap-3">
               <input
                 type="text"
@@ -142,37 +142,37 @@ export default function AccountsPage() {
                 onChange={(e) => { setHandle(e.target.value); setAddError(''); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
                 placeholder="@handle or handle"
-                className="flex-1 h-10 px-4 rounded-xl bg-[#252629] border border-[#2C2D33] text-[14px] text-white placeholder-[#4A4B55] focus:outline-none focus:border-[#AAFF00]/50 focus:ring-2 focus:ring-[#AAFF00]/10 transition-colors"
+                className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 focus:ring-2 focus:ring-[#2E6B4F]/10 transition-colors"
               />
               <button
                 onClick={handleAdd}
                 disabled={adding || !handle.trim()}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-[#AAFF00] hover:bg-[#99EE00] disabled:opacity-40 text-black text-[13px] font-semibold transition-colors"
+                className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors"
               >
                 <Plus size={15} />
                 {adding ? 'Adding…' : 'Add'}
               </button>
             </div>
-            {addError && <p className="text-[12px] text-red-400 mt-2">{addError}</p>}
+            {addError && <p className="text-[12px] text-red-500 mt-2">{addError}</p>}
           </div>
 
           {/* Accounts table */}
-          <div className="grain bg-[#1E1F23] rounded-[20px] border border-[#2C2D33] overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="bg-white rounded-[20px] border border-[#E8E9E6] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
             {loading ? (
-              <p className="text-[14px] text-[#8B8C99] p-6">Loading…</p>
+              <p className="text-[14px] text-[#7C8278] p-6">Loading…</p>
             ) : accounts.length === 0 ? (
               <div className="text-center py-16 px-6">
-                <p className="text-[15px] font-semibold text-white mb-1">No accounts yet</p>
-                <p className="text-[13px] text-[#8B8C99]">Add a TikTok handle above to start tracking.</p>
+                <p className="text-[15px] font-semibold text-[#16181A] mb-1">No accounts yet</p>
+                <p className="text-[13px] text-[#7C8278]">Add a TikTok handle above to start tracking.</p>
               </div>
             ) : (
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-[#2C2D33]">
+                  <tr className="border-b border-[#E8E9E6]">
                     {['Handle', 'Followers', 'Videos', 'Last refreshed', ''].map((h) => (
                       <th
                         key={h}
-                        className="text-left text-[10px] font-semibold text-[#4A4B55] uppercase tracking-[0.1em] px-6 py-4"
+                        className="text-left text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-6 py-4"
                       >
                         {h}
                       </th>
@@ -184,18 +184,18 @@ export default function AccountsPage() {
                     <tr
                       key={a.id}
                       onClick={() => router.push(`/accounts/${a.id}`)}
-                      className={`cursor-pointer hover:bg-[#252629] transition-colors ${i < accounts.length - 1 ? 'border-b border-[#2C2D33]' : ''}`}
+                      className={`cursor-pointer hover:bg-[#F3F4F2] transition-colors ${i < accounts.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}
                     >
                       <td className="px-6 py-4">
-                        <span className="text-[14px] font-semibold text-white">@{a.handle}</span>
+                        <span className="text-[14px] font-semibold text-[#16181A]">@{a.handle}</span>
                       </td>
-                      <td className="px-6 py-4 text-[14px] text-[#C8C9D0]">
+                      <td className="px-6 py-4 text-[14px] text-[#7C8278]">
                         {fmt(a.latest_snapshot?.followers ?? null)}
                       </td>
-                      <td className="px-6 py-4 text-[14px] text-[#C8C9D0]">
+                      <td className="px-6 py-4 text-[14px] text-[#7C8278]">
                         {fmt(a.latest_snapshot?.video_count ?? null)}
                       </td>
-                      <td className="px-6 py-4 text-[13px] text-[#8B8C99]">
+                      <td className="px-6 py-4 text-[13px] text-[#A9AEA4]">
                         {fmtDate(a.latest_snapshot?.fetched_at ?? null)}
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -203,13 +203,13 @@ export default function AccountsPage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); handleRefresh(a.id); }}
                             disabled={refreshingId === a.id}
-                            className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#2C2D33] hover:border-[#AAFF00]/50 hover:text-[#AAFF00] disabled:opacity-40 text-[#8B8C99] text-[12px] font-medium transition-colors"
+                            className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#E8E9E6] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 text-[#7C8278] text-[12px] font-medium transition-colors"
                           >
                             <RefreshCw size={12} className={refreshingId === a.id ? 'animate-spin' : ''} />
                             {refreshingId === a.id ? 'Refreshing…' : 'Refresh'}
                           </button>
                           {refreshErrors[a.id] && (
-                            <p className="text-[11px] text-red-400 max-w-[200px] text-right">{refreshErrors[a.id]}</p>
+                            <p className="text-[11px] text-red-500 max-w-[200px] text-right">{refreshErrors[a.id]}</p>
                           )}
                         </div>
                       </td>
@@ -225,8 +225,8 @@ export default function AccountsPage() {
         <aside className="w-72 shrink-0 hidden xl:flex flex-col gap-4 sticky top-4 self-start">
 
           {/* Summary stats */}
-          <div className="grain bg-[#1E1F23] rounded-[20px] p-5 border border-[#2C2D33] shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <p className="text-[10px] font-semibold text-[#4A4B55] uppercase tracking-[0.1em] mb-4">Summary</p>
+          <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+            <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Summary</p>
             <div className="flex flex-col gap-3">
               {[
                 { label: 'Accounts tracked', value: accounts.length, icon: Users },
@@ -234,11 +234,11 @@ export default function AccountsPage() {
                 { label: 'Total videos tracked', value: fmt(totalVideos || null), icon: Video },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[rgba(170,255,0,0.08)] flex items-center justify-center shrink-0">
-                    <Icon size={14} className="text-[#AAFF00]" />
+                  <div className="w-8 h-8 rounded-lg bg-[#E8F2EC] flex items-center justify-center shrink-0">
+                    <Icon size={14} className="text-[#1F4D3A]" />
                   </div>
-                  <span className="text-[13px] text-[#8B8C99] flex-1">{label}</span>
-                  <span className="text-[15px] font-bold text-white">{loading ? '—' : value}</span>
+                  <span className="text-[13px] text-[#7C8278] flex-1">{label}</span>
+                  <span className="text-[15px] font-bold text-[#16181A]">{loading ? '—' : value}</span>
                 </div>
               ))}
             </div>
@@ -246,26 +246,26 @@ export default function AccountsPage() {
 
           {/* Recently refreshed */}
           {recentlyRefreshed.length > 0 && (
-            <div className="grain bg-[#1E1F23] rounded-[20px] p-5 border border-[#2C2D33] shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <p className="text-[10px] font-semibold text-[#4A4B55] uppercase tracking-[0.1em] mb-4">Recently refreshed</p>
+            <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Recently refreshed</p>
               <div className="flex flex-col">
                 {recentlyRefreshed.map((a, i) => (
                   <div
                     key={a.id}
                     onClick={() => router.push(`/accounts/${a.id}`)}
                     className={`flex items-center justify-between py-3 cursor-pointer group ${
-                      i < recentlyRefreshed.length - 1 ? 'border-b border-[#2C2D33]' : ''
+                      i < recentlyRefreshed.length - 1 ? 'border-b border-[#E8E9E6]' : ''
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#C8C9D0] group-hover:text-[#AAFF00] transition-colors">
+                      <p className="text-[13px] font-medium text-[#16181A] group-hover:text-[#2E6B4F] transition-colors">
                         @{a.handle}
                       </p>
-                      <p className="text-[11px] text-[#4A4B55] mt-0.5">
+                      <p className="text-[11px] text-[#A9AEA4] mt-0.5">
                         {fmtDate(a.latest_snapshot?.fetched_at ?? null)}
                       </p>
                     </div>
-                    <span className="text-[13px] font-semibold text-white shrink-0 ml-3">
+                    <span className="text-[13px] font-semibold text-[#16181A] shrink-0 ml-3">
                       {fmt(a.latest_snapshot?.followers ?? null)}
                     </span>
                   </div>
