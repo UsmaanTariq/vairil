@@ -18,10 +18,18 @@ export async function POST(
     return NextResponse.json({ error: 'Account not found' }, { status: 404 });
   }
 
-  const [profile, videos] = await Promise.all([
-    getProfile(account.handle),
-    getVideos(account.handle),
-  ]);
+  let profile, videos;
+  try {
+    [profile, videos] = await Promise.all([
+      getProfile(account.handle),
+      getVideos(account.handle),
+    ]);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'TikTok API request failed' },
+      { status: 502 }
+    );
+  }
 
   const { data: snapshot, error: insertError } = await supabase
     .from('tiktok_snapshots')

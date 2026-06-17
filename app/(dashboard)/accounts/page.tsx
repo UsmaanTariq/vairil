@@ -55,24 +55,30 @@ export default function AccountsPage() {
 
   async function handleRefresh(id: string) {
     setRefreshingId(id);
-    const res = await fetch(`/api/tiktok/accounts/${id}/refresh`, { method: 'POST' });
-    const data = await res.json();
-    setRefreshingId(null);
-    if (!res.ok) return;
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              latest_snapshot: {
-                followers: data.snapshot.followers,
-                video_count: data.snapshot.video_count,
-                fetched_at: data.snapshot.fetched_at,
-              },
-            }
-          : a
-      )
-    );
+    try {
+      const res = await fetch(`/api/tiktok/accounts/${id}/refresh`, { method: 'POST' });
+      const data = await res.json();
+      setRefreshingId(null);
+      if (!res.ok) return;
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                latest_snapshot: {
+                  followers: data.snapshot.followers,
+                  video_count: data.snapshot.video_count,
+                  fetched_at: data.snapshot.fetched_at,
+                },
+              }
+            : a
+        )
+      );
+    } catch {
+      // network error or non-JSON response — spinner still stops
+    } finally {
+      setRefreshingId(null);
+    }
   }
 
   function fmt(n: number | null) {
