@@ -1,6 +1,7 @@
 export interface TikTokProfile {
   followers: number;
   video_count: number;
+  sec_uid: string;
 }
 
 export interface TikTokVideoStat {
@@ -20,7 +21,7 @@ const HEADERS = {
 };
 
 export async function getProfile(handle: string): Promise<TikTokProfile> {
-  const res = await fetch(`${BASE}/user/info?unique_id=${encodeURIComponent(handle)}`, {
+  const res = await fetch(`${BASE}/api/user/info?uniqueId=${encodeURIComponent(handle)}`, {
     headers: HEADERS,
   });
   if (!res.ok) {
@@ -28,29 +29,35 @@ export async function getProfile(handle: string): Promise<TikTokProfile> {
     throw new Error(`TikTok profile fetch failed (${res.status}): ${body}`);
   }
   const json = await res.json();
-  const stats = json.data?.stats ?? json.userInfo?.stats ?? {};
+  const user  = json.data?.user  ?? {};
+  const stats = json.data?.stats ?? {};
   return {
-    followers: stats.followerCount ?? 0,
-    video_count: stats.videoCount ?? 0,
+    followers:   stats.followerCount ?? 0,
+    video_count: stats.videoCount    ?? 0,
+    sec_uid:     user.secUid         ?? '',
   };
 }
 
-export async function getVideos(handle: string): Promise<TikTokVideoStat[]> {
+export async function getVideos(secUid: string): Promise<TikTokVideoStat[]> {
   const res = await fetch(
-    `${BASE}/user/posts?unique_id=${encodeURIComponent(handle)}&count=30`,
+    `${BASE}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=30&cursor=0`,
     { headers: HEADERS }
   );
-  if (!res.ok) throw new Error(`TikTok videos fetch failed: ${res.statusText}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`TikTok videos fetch failed (${res.status}): ${body}`);
+  }
   const json = await res.json();
-  const videos: Record<string, unknown>[] = json.data?.videos ?? json.data?.itemList ?? [];
-  return videos.map((v) => {
-    const views    = (v.play ?? v.playCount ?? 0) as number;
-    const likes    = (v.digg_count ?? v.diggCount ?? 0) as number;
-    const comments = (v.comment_count ?? v.commentCount ?? 0) as number;
-    const shares   = (v.share_count ?? v.shareCount ?? 0) as number;
+  const items: Record<string, unknown>[] = json.data?.itemList ?? [];
+  return items.map((v) => {
+    const s        = (v.stats ?? {}) as Record<string, number>;
+    const views    = s.playCount    ?? 0;
+    const likes    = s.diggCount    ?? 0;
+    const comments = s.commentCount ?? 0;
+    const shares   = s.shareCount   ?? 0;
     return {
-      video_id: (v.video_id ?? v.id ?? '') as string,
-      title: (v.title ?? v.desc ?? '') as string,
+      video_id:        (v.id   ?? '') as string,
+      title:           (v.desc ?? '') as string,
       views,
       likes,
       comments,

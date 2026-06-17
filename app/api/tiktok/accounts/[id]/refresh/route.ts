@@ -20,10 +20,8 @@ export async function POST(
 
   let profile, videos;
   try {
-    [profile, videos] = await Promise.all([
-      getProfile(account.handle),
-      getVideos(account.handle),
-    ]);
+    profile = await getProfile(account.handle);
+    videos  = await getVideos(profile.sec_uid);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'TikTok API request failed' },
