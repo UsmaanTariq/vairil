@@ -33,7 +33,7 @@ export async function GET(
       .order('fetched_at', { ascending: true });
 
     const latest = snapshots?.at(-1) ?? null;
-    return { account_id: account.id, latest_snapshot: latest, snapshots: snapshots ?? [] };
+    return { account_id: account.id, handle: project!.tiktok_handle, latest_snapshot: latest, snapshots: snapshots ?? [] };
   }
 
   async function getInstagramData() {

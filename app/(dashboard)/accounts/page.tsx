@@ -2,96 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Plus, RefreshCw, TrendingUp, Video } from 'lucide-react';
+import { LayoutDashboard, Users, TrendingUp, Layers } from 'lucide-react';
 
-interface Snapshot {
-  followers: number | null;
-  video_count: number | null;
-  fetched_at: string | null;
-}
-
-interface Account {
+interface Project {
   id: string;
-  handle: string;
+  client_name: string;
+  niche: string | null;
+  platforms: string[];
+  tiktok_handle: string | null;
+  instagram_handle: string | null;
+  status: string;
   created_at: string;
-  latest_snapshot: Snapshot | null;
+  ideas_count: number;
+  approved_count: number;
 }
 
 export default function AccountsPage() {
   const router = useRouter();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [handle, setHandle] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState('');
-  const [refreshingId, setRefreshingId] = useState<string | null>(null);
-  const [refreshErrors, setRefreshErrors] = useState<Record<string, string>>({});
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    fetch('/api/tiktok/accounts')
+    fetch('/api/projects')
       .then((r) => r.json())
-      .then((d) => setAccounts(d.accounts ?? []))
+      .then((d) => setProjects(d.projects ?? []))
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleAdd() {
-    const trimmed = handle.replace(/^@/, '').trim();
-    if (!trimmed) return;
-    setAdding(true);
-    setAddError('');
-    const res = await fetch('/api/tiktok/accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle: trimmed }),
-    });
-    const data = await res.json();
-    setAdding(false);
-    if (!res.ok) { setAddError(data.error ?? 'Failed to add account'); return; }
-    setHandle('');
-    setAccounts((prev) => [{ ...data.account, latest_snapshot: null }, ...prev]);
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  async function handleRefresh(id: string) {
-    setRefreshingId(id);
-    setRefreshErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
-    try {
-      const res = await fetch(`/api/tiktok/accounts/${id}/refresh`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { setRefreshErrors((prev) => ({ ...prev, [id]: data.error ?? 'Refresh failed' })); return; }
-      setAccounts((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, latest_snapshot: { followers: data.snapshot.followers, video_count: data.snapshot.video_count, fetched_at: data.snapshot.fetched_at } }
-            : a
-        )
-      );
-    } catch {
-      setRefreshErrors((prev) => ({ ...prev, [id]: 'Network error' }));
-    } finally {
-      setRefreshingId(null);
-    }
-  }
-
-  function fmt(n: number | null) {
-    if (n === null) return '—';
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toLocaleString();
-  }
-
-  function fmtDate(iso: string | null) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  }
-
-  const totalFollowers = accounts.reduce((s, a) => s + (a.latest_snapshot?.followers ?? 0), 0);
-  const totalVideos    = accounts.reduce((s, a) => s + (a.latest_snapshot?.video_count ?? 0), 0);
-  const recentlyRefreshed = [...accounts]
-    .filter((a) => a.latest_snapshot?.fetched_at)
-    .sort((a, b) =>
-      new Date(b.latest_snapshot!.fetched_at!).getTime() - new Date(a.latest_snapshot!.fetched_at!).getTime()
-    )
-    .slice(0, 5);
+  const withTikTok    = projects.filter((p) => p.tiktok_handle);
+  const withInstagram = projects.filter((p) => p.instagram_handle);
 
   return (
     <div className="min-h-screen bg-[#F3F4F2] dot-grid">
@@ -107,9 +50,7 @@ export default function AccountsPage() {
               <span className="text-[14px] font-bold text-[#16181A] tracking-tight">TrendForge</span>
             </div>
             <div className="flex-1 flex flex-col gap-1">
-              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-3 mb-2">
-                Workspace
-              </p>
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-3 mb-2">Workspace</p>
               <button
                 onClick={() => router.push('/')}
                 className="flex items-center gap-3 h-10 px-3 rounded-xl text-[#7C8278] hover:bg-[#F3F4F2] hover:text-[#16181A] transition-colors w-full text-left"
@@ -128,90 +69,64 @@ export default function AccountsPage() {
         {/* Main */}
         <main className="flex-1 min-w-0 flex flex-col gap-4">
           <div>
-            <h1 className="text-[22px] font-bold text-[#16181A]">TikTok Accounts</h1>
-            <p className="text-[13px] text-[#7C8278] mt-0.5">Track client performance over time</p>
+            <h1 className="text-[22px] font-bold text-[#16181A]">Accounts</h1>
+            <p className="text-[13px] text-[#7C8278] mt-0.5">Click a project to view its analytics</p>
           </div>
 
-          {/* Add account */}
-          <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-            <p className="text-[12px] font-semibold text-[#A9AEA4] uppercase tracking-[0.08em] mb-3">Add account</p>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={handle}
-                onChange={(e) => { setHandle(e.target.value); setAddError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                placeholder="@handle or handle"
-                className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 focus:ring-2 focus:ring-[#2E6B4F]/10 transition-colors"
-              />
-              <button
-                onClick={handleAdd}
-                disabled={adding || !handle.trim()}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors"
-              >
-                <Plus size={15} />
-                {adding ? 'Adding…' : 'Add'}
-              </button>
-            </div>
-            {addError && <p className="text-[12px] text-red-500 mt-2">{addError}</p>}
-          </div>
-
-          {/* Accounts table */}
           <div className="bg-white rounded-[20px] border border-[#E8E9E6] overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
             {loading ? (
               <p className="text-[14px] text-[#7C8278] p-6">Loading…</p>
-            ) : accounts.length === 0 ? (
+            ) : projects.length === 0 ? (
               <div className="text-center py-16 px-6">
-                <p className="text-[15px] font-semibold text-[#16181A] mb-1">No accounts yet</p>
-                <p className="text-[13px] text-[#7C8278]">Add a TikTok handle above to start tracking.</p>
+                <p className="text-[15px] font-semibold text-[#16181A] mb-1">No projects yet</p>
+                <p className="text-[13px] text-[#7C8278]">Create a project from the dashboard to start tracking analytics.</p>
               </div>
             ) : (
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#E8E9E6]">
-                    {['Handle', 'Followers', 'Videos', 'Last refreshed', ''].map((h) => (
-                      <th
-                        key={h}
-                        className="text-left text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-6 py-4"
-                      >
+                    {['Project', 'Platforms', 'Status', 'Created'].map((h) => (
+                      <th key={h} className="text-left text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] px-6 py-4">
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map((a, i) => (
+                  {projects.map((p, i) => (
                     <tr
-                      key={a.id}
-                      onClick={() => router.push(`/accounts/${a.id}`)}
-                      className={`cursor-pointer hover:bg-[#F3F4F2] transition-colors ${i < accounts.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}
+                      key={p.id}
+                      onClick={() => router.push(`/project/${p.id}/analytics`)}
+                      className={`cursor-pointer hover:bg-[#F3F4F2] transition-colors ${i < projects.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}
                     >
                       <td className="px-6 py-4">
-                        <span className="text-[14px] font-semibold text-[#16181A]">@{a.handle}</span>
+                        <p className="text-[14px] font-semibold text-[#16181A]">{p.client_name}</p>
+                        {p.niche && <p className="text-[12px] text-[#A9AEA4] mt-0.5">{p.niche}</p>}
                       </td>
-                      <td className="px-6 py-4 text-[14px] text-[#7C8278]">
-                        {fmt(a.latest_snapshot?.followers ?? null)}
-                      </td>
-                      <td className="px-6 py-4 text-[14px] text-[#7C8278]">
-                        {fmt(a.latest_snapshot?.video_count ?? null)}
-                      </td>
-                      <td className="px-6 py-4 text-[13px] text-[#A9AEA4]">
-                        {fmtDate(a.latest_snapshot?.fetched_at ?? null)}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRefresh(a.id); }}
-                            disabled={refreshingId === a.id}
-                            className="inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-[#E8E9E6] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 text-[#7C8278] text-[12px] font-medium transition-colors"
-                          >
-                            <RefreshCw size={12} className={refreshingId === a.id ? 'animate-spin' : ''} />
-                            {refreshingId === a.id ? 'Refreshing…' : 'Refresh'}
-                          </button>
-                          {refreshErrors[a.id] && (
-                            <p className="text-[11px] text-red-500 max-w-[200px] text-right">{refreshErrors[a.id]}</p>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2 flex-wrap">
+                          {p.tiktok_handle && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E8F2EC] text-[#1F4D3A] text-[11px] font-semibold">
+                              TikTok
+                            </span>
+                          )}
+                          {p.instagram_handle && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#EEF2FD] text-[#4B6EC8] text-[11px] font-semibold">
+                              Instagram
+                            </span>
+                          )}
+                          {!p.tiktok_handle && !p.instagram_handle && (
+                            <span className="text-[12px] text-[#A9AEA4]">None linked</span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#F3F4F2] text-[#7C8278] text-[11px] font-medium capitalize">
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-[13px] text-[#A9AEA4]">
+                        {fmtDate(p.created_at)}
                       </td>
                     </tr>
                   ))}
@@ -223,15 +138,13 @@ export default function AccountsPage() {
 
         {/* Right panel */}
         <aside className="w-72 shrink-0 hidden xl:flex flex-col gap-4 sticky top-4 self-start">
-
-          {/* Summary stats */}
           <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
             <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Summary</p>
             <div className="flex flex-col gap-3">
               {[
-                { label: 'Accounts tracked', value: accounts.length, icon: Users },
-                { label: 'Total followers', value: fmt(totalFollowers || null), icon: TrendingUp },
-                { label: 'Total videos tracked', value: fmt(totalVideos || null), icon: Video },
+                { label: 'Projects',            value: projects.length,          icon: Layers },
+                { label: 'With TikTok',         value: withTikTok.length,        icon: TrendingUp },
+                { label: 'With Instagram',      value: withInstagram.length,     icon: Users },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-[#E8F2EC] flex items-center justify-center shrink-0">
@@ -244,30 +157,26 @@ export default function AccountsPage() {
             </div>
           </div>
 
-          {/* Recently refreshed */}
-          {recentlyRefreshed.length > 0 && (
+          {projects.length > 0 && (
             <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Recently refreshed</p>
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Recent projects</p>
               <div className="flex flex-col">
-                {recentlyRefreshed.map((a, i) => (
+                {projects.slice(0, 5).map((p, i) => (
                   <div
-                    key={a.id}
-                    onClick={() => router.push(`/accounts/${a.id}`)}
-                    className={`flex items-center justify-between py-3 cursor-pointer group ${
-                      i < recentlyRefreshed.length - 1 ? 'border-b border-[#E8E9E6]' : ''
-                    }`}
+                    key={p.id}
+                    onClick={() => router.push(`/project/${p.id}/analytics`)}
+                    className={`flex items-center justify-between py-3 cursor-pointer group ${i < Math.min(projects.length, 5) - 1 ? 'border-b border-[#E8E9E6]' : ''}`}
                   >
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#16181A] group-hover:text-[#2E6B4F] transition-colors">
-                        @{a.handle}
+                      <p className="text-[13px] font-medium text-[#16181A] group-hover:text-[#2E6B4F] transition-colors truncate">
+                        {p.client_name}
                       </p>
-                      <p className="text-[11px] text-[#A9AEA4] mt-0.5">
-                        {fmtDate(a.latest_snapshot?.fetched_at ?? null)}
-                      </p>
+                      <p className="text-[11px] text-[#A9AEA4] mt-0.5">{fmtDate(p.created_at)}</p>
                     </div>
-                    <span className="text-[13px] font-semibold text-[#16181A] shrink-0 ml-3">
-                      {fmt(a.latest_snapshot?.followers ?? null)}
-                    </span>
+                    <div className="flex gap-1 ml-3 shrink-0">
+                      {p.tiktok_handle    && <span className="w-2 h-2 rounded-full bg-[#2E6B4F]" />}
+                      {p.instagram_handle && <span className="w-2 h-2 rounded-full bg-[#4B6EC8]" />}
+                    </div>
                   </div>
                 ))}
               </div>
