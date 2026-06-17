@@ -39,3 +39,19 @@ create table if not exists ideas (
   shot_list jsonb, audio text, caption text, hashtags text[], why text,
   status text default 'draft'  -- draft|approved
 );
+
+create table if not exists tiktok_accounts (
+  id uuid primary key default gen_random_uuid(),
+  handle text not null unique,
+  created_at timestamptz default now(),
+  project_id uuid references projects(id) on delete set null
+);
+
+create table if not exists tiktok_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references tiktok_accounts(id) on delete cascade,
+  fetched_at timestamptz default now(),
+  followers integer,
+  video_count integer,
+  videos jsonb default '[]'::jsonb
+);
