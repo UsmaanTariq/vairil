@@ -74,7 +74,7 @@ export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
 
     return {
       post_id:  String(node.id ?? node.shortcode ?? ''),
-      caption:  caption.slice(0, 300),
+      caption:  [...caption].slice(0, 300).join(''),
       views,
       likes,
       comments,
