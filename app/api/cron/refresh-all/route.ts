@@ -19,6 +19,9 @@ export async function GET(req: NextRequest) {
     try {
       const profile = await getTikTokProfile(account.handle);
       const videos  = await getVideos(profile.sec_uid);
+      if (profile.profile_pic_url) {
+        await supabase.from('tiktok_accounts').update({ profile_pic_url: profile.profile_pic_url }).eq('id', account.id);
+      }
       await supabase.from('tiktok_snapshots').insert({
         account_id:  account.id,
         followers:   profile.followers,
@@ -42,11 +45,15 @@ export async function GET(req: NextRequest) {
     try {
       const profile = await getInstagramProfile(account.handle);
       const posts   = await getPosts(profile.user_id);
+      const safePosts = JSON.parse(JSON.stringify(posts ?? []));
+      if (profile.profile_pic_url) {
+        await supabase.from('instagram_accounts').update({ profile_pic_url: profile.profile_pic_url }).eq('id', account.id);
+      }
       await supabase.from('instagram_snapshots').insert({
         account_id: account.id,
         followers:  profile.followers,
         post_count: profile.post_count,
-        posts,
+        posts:      safePosts,
       });
       igSucceeded++;
     } catch (err) {

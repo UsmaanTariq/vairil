@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,11 @@ import {
   Users,
   LayoutDashboard,
   Plus,
+  Eye,
+  UserRound,
+  Video,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -88,6 +93,72 @@ function StageProgress({ status }: { status: string }) {
   );
 }
 
+function MiniSparkline({ data, up }: { data: number[]; up: boolean }) {
+  if (data.length < 2) return null;
+  const w = 80, h = 28;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none">
+      <polyline points={pts} stroke={up ? '#2E6B4F' : '#EF4444'} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  deltaPct,
+  icon: Icon,
+  hero = false,
+  loading,
+}: {
+  label: string;
+  value: string | null;
+  deltaPct: number | null;
+  icon: React.ElementType;
+  hero?: boolean;
+  loading: boolean;
+}) {
+  const up = deltaPct !== null && deltaPct >= 0;
+  return (
+    <div
+      className={`rounded-[20px] p-5 border ${
+        hero
+          ? 'bg-[#1F4D3A] border-[#1F4D3A] shadow-[0_4px_24px_rgba(31,77,58,0.20)]'
+          : 'bg-white border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]'
+      }`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <p className={`text-[12px] ${hero ? 'text-[#7FBE9A]' : 'text-[#7C8278]'}`}>{label}</p>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${hero ? 'bg-white/10' : 'bg-[#E8F2EC]'}`}>
+          <Icon size={13} className={hero ? 'text-white' : 'text-[#1F4D3A]'} />
+        </div>
+      </div>
+      <div className="flex items-end gap-2">
+        <p className={`text-[32px] font-bold leading-none ${hero ? 'text-white' : 'text-[#16181A]'}`}>
+          {loading ? '—' : (value ?? '—')}
+        </p>
+        {!loading && deltaPct !== null && (
+          <span className={`flex items-center gap-0.5 text-[11px] font-semibold mb-1 px-1.5 py-0.5 rounded-full ${
+            up
+              ? hero ? 'bg-white/15 text-white' : 'bg-[#E8F2EC] text-[#2E6B4F]'
+              : hero ? 'bg-white/15 text-red-300' : 'bg-red-50 text-red-500'
+          }`}>
+            {up ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {Math.abs(deltaPct)}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -117,15 +188,28 @@ export default function DashboardPage() {
 
   const [combinedTrend, setCombinedTrend] = useState<{ date: string; views: number }[]>([]);
 
+  interface Kpis {
+    views:     { today: number; delta_pct: number | null };
+    followers: { total: number; delta_pct: number | null };
+    videos:    { total: number };
+    clients:   { total: number };
+  }
+  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [velocity, setVelocity] = useState<Record<string, { trend: number[]; delta_pct: number | null }>>({});
+
   useEffect(() => {
     Promise.all([
       fetch('/api/projects').then((r) => r.json()),
       fetch('/api/ideas/recent').then((r) => r.json()),
       fetch('/api/analytics/combined-views').then((r) => r.json()),
-    ]).then(([projectsData, ideasData, trendData]) => {
+      fetch('/api/analytics/kpis').then((r) => r.json()),
+      fetch('/api/analytics/velocity').then((r) => r.json()),
+    ]).then(([projectsData, ideasData, trendData, kpisData, velocityData]) => {
       setProjects(projectsData.projects ?? []);
       setRecentIdeas(ideasData.ideas ?? []);
       setCombinedTrend(trendData.trend ?? []);
+      setKpis(kpisData);
+      setVelocity(velocityData.velocity ?? {});
     }).finally(() => setLoading(false));
   }, []);
 
@@ -202,13 +286,6 @@ export default function DashboardPage() {
     { value: totalTrends,     label: 'Trends researched', icon: TrendingUp },
   ];
 
-  const topStatCards = [
-    { value: projects.length, label: 'Total clients',    icon: Users,        hero: true },
-    { value: activeCount,     label: 'Active projects',  icon: Layers,       hero: false },
-    { value: totalIdeas,      label: 'Ideas generated',  icon: Lightbulb,    hero: false },
-    { value: doneCount,       label: 'Completed',        icon: CheckCircle2, hero: false },
-  ];
-
   return (
     <div className="min-h-screen bg-[#F3F4F2] dot-grid">
       <div className="flex gap-4 p-4 min-h-screen">
@@ -255,28 +332,41 @@ export default function DashboardPage() {
         {/* Main */}
         <main className="flex-1 min-w-0 flex flex-col gap-4">
 
-          {/* Stat cards */}
+          {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {topStatCards.map(({ value, label, icon: Icon, hero }) => (
-              <div
-                key={label}
-                className={`rounded-[20px] p-5 border ${
-                  hero
-                    ? 'bg-[#1F4D3A] border-[#1F4D3A] shadow-[0_4px_24px_rgba(31,77,58,0.20)]'
-                    : 'bg-white border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <p className={`text-[12px] ${hero ? 'text-[#7FBE9A]' : 'text-[#7C8278]'}`}>{label}</p>
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${hero ? 'bg-white/10' : 'bg-[#E8F2EC]'}`}>
-                    <Icon size={13} className={hero ? 'text-white' : 'text-[#1F4D3A]'} />
-                  </div>
-                </div>
-                <p className={`text-[32px] font-bold leading-none ${hero ? 'text-white' : 'text-[#16181A]'}`}>
-                  {loading ? '—' : value}
-                </p>
-              </div>
-            ))}
+            {/* Combined Views */}
+            <KpiCard
+              label="Combined views"
+              value={kpis ? fmt(kpis.views.today) ?? String(kpis.views.today) : null}
+              deltaPct={kpis?.views.delta_pct ?? null}
+              icon={Eye}
+              hero
+              loading={loading}
+            />
+            {/* Total Followers */}
+            <KpiCard
+              label="Total followers"
+              value={kpis ? fmt(kpis.followers.total) ?? String(kpis.followers.total) : null}
+              deltaPct={kpis?.followers.delta_pct ?? null}
+              icon={UserRound}
+              loading={loading}
+            />
+            {/* Videos posted */}
+            <KpiCard
+              label="Videos posted"
+              value={kpis ? String(kpis.videos.total) : null}
+              deltaPct={null}
+              icon={Video}
+              loading={loading}
+            />
+            {/* Clients */}
+            <KpiCard
+              label="Clients"
+              value={kpis ? String(kpis.clients.total) : null}
+              deltaPct={null}
+              icon={Users}
+              loading={loading}
+            />
           </div>
 
           {/* Combined views chart */}
@@ -284,13 +374,14 @@ export default function DashboardPage() {
             <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
               <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Combined views (TikTok + Instagram)</p>
               <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={combinedTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <LineChart data={combinedTrend} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={40} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`} />
                   <Tooltip
                     contentStyle={{ background: '#fff', border: '1px solid #E8E9E6', borderRadius: 12, fontSize: 12 }}
                     labelStyle={{ color: '#16181A', fontWeight: 600 }}
+                    formatter={(v) => [Number(v).toLocaleString(), 'Views']}
                   />
                   <Line type="monotone" dataKey="views" stroke="#1F4D3A" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#1F4D3A' }} />
                 </LineChart>
@@ -463,6 +554,24 @@ export default function DashboardPage() {
                             })}
                           </p>
                         </div>
+                        {velocity[p.id] && velocity[p.id].trend.length >= 2 && (() => {
+                          const { trend, delta_pct } = velocity[p.id];
+                          const up = delta_pct === null || delta_pct >= 0;
+                          return (
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E8E9E6]">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-[10px] text-[#A9AEA4] uppercase tracking-wide font-medium">View velocity</p>
+                                {delta_pct !== null && (
+                                  <span className={`flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${up ? 'bg-[#E8F2EC] text-[#2E6B4F]' : 'bg-red-50 text-red-500'}`}>
+                                    {up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                                    {Math.abs(delta_pct)}%
+                                  </span>
+                                )}
+                              </div>
+                              <MiniSparkline data={trend} up={up} />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
