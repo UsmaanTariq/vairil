@@ -33,7 +33,7 @@ export async function GET() {
     id: row.id as string,
     title: row.title as string,
     hook: row.hook as string,
-    status: (row.status ?? 'draft') as 'draft' | 'approved',
+    status: (row.status ?? 'new') as 'new' | 'approved' | 'rejected',
     project_id: row.project_id as string,
     client_name: projectMap[row.project_id as string] ?? 'Unknown',
   }));

@@ -217,24 +217,41 @@ export async function POST(req: NextRequest) {
       temperature: 0.2,
     });
 
+    let insertedTrends = trends;
     if (trends.length > 0) {
-      await supabase.from('trends').insert(
-        trends.map((t) => ({
-          project_id,
-          name: t.name,
-          description: t.description,
-          platform: t.platform,
-          format: t.format,
-          audio: t.audio ?? null,
-          relevance: t.relevance,
-          confidence: t.confidence,
-          trend_date: t.trendDate,
-          source_url: t.sourceUrl,
-        }))
-      );
+      const { data: inserted } = await supabase
+        .from('trends')
+        .insert(
+          trends.map((t) => ({
+            project_id,
+            name: t.name,
+            description: t.description,
+            platform: t.platform,
+            format: t.format,
+            audio: t.audio ?? null,
+            relevance: t.relevance,
+            confidence: t.confidence,
+            trend_date: t.trendDate,
+            source_url: t.sourceUrl,
+          }))
+        )
+        .select('id, name, description, platform, format, audio, relevance, source_url, trend_date, confidence');
+
+      insertedTrends = (inserted ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description ?? '',
+        platform: row.platform,
+        format: row.format,
+        audio: row.audio ?? undefined,
+        relevance: row.relevance,
+        confidence: row.confidence as 'high' | 'med' | 'low',
+        trendDate: row.trend_date,
+        sourceUrl: row.source_url,
+      }));
     }
 
-    return NextResponse.json({ trends });
+    return NextResponse.json({ trends: insertedTrends });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to run research';
     return NextResponse.json({ error: message }, { status: 500 });
