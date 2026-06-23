@@ -47,7 +47,7 @@ export async function PATCH(
     feedback_reason?: string | null;
   };
   const update: Record<string, unknown> = {};
-  if (status) {
+  if (status !== undefined) {
     if (!["new", "approved", "rejected"].includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
