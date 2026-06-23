@@ -8,7 +8,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-import { AppShell } from '@/components/app-shell';
 import {
   Card,
   CardContent,
@@ -320,7 +319,7 @@ export default function ProjectAnalyticsPage() {
   const hasInstagram = Boolean(data?.instagram);
 
   return (
-    <AppShell>
+    <>
       {loading ? (
         <Card className="dark:bg-transparent"><CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
       ) : error ? (
@@ -865,6 +864,6 @@ export default function ProjectAnalyticsPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
