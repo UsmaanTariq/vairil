@@ -26,14 +26,31 @@ export async function GET(
       .maybeSingle();
     if (!account) return null;
 
-    const { data: snapshots } = await supabase
-      .from('tiktok_snapshots')
-      .select('id, fetched_at, followers, video_count, videos')
-      .eq('account_id', account.id)
-      .order('fetched_at', { ascending: true });
+    const [{ data: snapshots }, { data: latestSnapshot }] = await Promise.all([
+      supabase
+        .from('tiktok_snapshots')
+        .select('id, fetched_at, followers, video_count, videos')
+        .eq('account_id', account.id)
+        .order('fetched_at', { ascending: true }),
+      supabase
+        .from('tiktok_snapshots')
+        .select('id, fetched_at, followers, video_count, videos')
+        .eq('account_id', account.id)
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    const latest = snapshots?.at(-1) ?? null;
-    return { account_id: account.id, handle: project!.tiktok_handle, latest_snapshot: latest, snapshots: snapshots ?? [] };
+    // Sum lifetime views at each snapshot, then drop the heavy videos array from the trend payload.
+    const trend = (snapshots ?? []).map((s) => ({
+      id: s.id,
+      fetched_at: s.fetched_at,
+      followers: s.followers,
+      video_count: s.video_count,
+      views: ((s.videos ?? []) as { views: number | null }[]).reduce((acc, v) => acc + (v.views ?? 0), 0),
+    }));
+
+    return { account_id: account.id, handle: project!.tiktok_handle, latest_snapshot: latestSnapshot ?? null, snapshots: trend };
   }
 
   async function getInstagramData() {
@@ -45,14 +62,31 @@ export async function GET(
       .maybeSingle();
     if (!account) return null;
 
-    const { data: snapshots } = await supabase
-      .from('instagram_snapshots')
-      .select('id, fetched_at, followers, post_count, posts')
-      .eq('account_id', account.id)
-      .order('fetched_at', { ascending: true });
+    const [{ data: snapshots }, { data: latestSnapshot }] = await Promise.all([
+      supabase
+        .from('instagram_snapshots')
+        .select('id, fetched_at, followers, post_count, posts')
+        .eq('account_id', account.id)
+        .order('fetched_at', { ascending: true }),
+      supabase
+        .from('instagram_snapshots')
+        .select('id, fetched_at, followers, post_count, posts')
+        .eq('account_id', account.id)
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    const latest = snapshots?.at(-1) ?? null;
-    return { account_id: account.id, latest_snapshot: latest, snapshots: snapshots ?? [] };
+    // Sum lifetime views at each snapshot, then drop the heavy posts array from the trend payload.
+    const trend = (snapshots ?? []).map((s) => ({
+      id: s.id,
+      fetched_at: s.fetched_at,
+      followers: s.followers,
+      post_count: s.post_count,
+      views: ((s.posts ?? []) as { views: number | null }[]).reduce((acc, p) => acc + (p.views ?? 0), 0),
+    }));
+
+    return { account_id: account.id, latest_snapshot: latestSnapshot ?? null, snapshots: trend };
   }
 
   const [tiktok, instagram] = await Promise.all([getTikTokData(), getInstagramData()]);

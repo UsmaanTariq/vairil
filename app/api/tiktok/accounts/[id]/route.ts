@@ -19,7 +19,7 @@ export async function GET(
 
   const { data: snapshots } = await supabase
     .from('tiktok_snapshots')
-    .select('id, fetched_at, followers, video_count, videos')
+    .select('id, fetched_at, followers, video_count')
     .eq('account_id', id)
     .order('fetched_at', { ascending: true });
 

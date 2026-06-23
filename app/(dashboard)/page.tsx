@@ -28,7 +28,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 interface Project {
   id: string;
@@ -73,6 +73,16 @@ const STATUS_STYLES: Record<string, string> = {
   research:  'bg-[#EAF0FB] text-[#3B82C4]',
   ideas:     'bg-[#E8F2EC] text-[#2E6B4F]',
   done:      'bg-[#1F4D3A] text-white',
+};
+
+// Stage accent bar colour — runs down the left edge of each project card.
+const STATUS_ACCENTS: Record<string, string> = {
+  intake:    'bg-[#C9CEC4]',
+  interview: 'bg-[#E5B84B]',
+  synthesis: 'bg-[#E5B84B]',
+  research:  'bg-[#6BA3D6]',
+  ideas:     'bg-[#5AA77B]',
+  done:      'bg-[#1F4D3A]',
 };
 
 function StageProgress({ status }: { status: string }) {
@@ -273,6 +283,12 @@ export default function DashboardPage() {
     setDeletingProject(null);
   }
 
+  // Per-day combined views = the day-over-day gain between cumulative snapshots (clamped at 0).
+  const combinedPerDay = combinedTrend.slice(1).map((d, i) => ({
+    date: d.date,
+    views: Math.max(0, d.views - combinedTrend[i].views),
+  }));
+
   const totalIdeas  = projects.reduce((s, p) => s + p.ideas_count, 0);
   const totalTrends = projects.reduce((s, p) => s + p.trends_count, 0);
   const activeCount = projects.filter((p) => p.status !== 'done').length;
@@ -369,34 +385,68 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Combined views chart */}
+          {/* Combined views — cumulative */}
           {combinedTrend.length >= 2 && (
             <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Combined views (TikTok + Instagram)</p>
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Cumulative views (TikTok + Instagram)</p>
               <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={combinedTrend} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
+                <AreaChart data={combinedTrend} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="combinedViews" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1F4D3A" stopOpacity={0.22} />
+                      <stop offset="100%" stopColor="#1F4D3A" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#EEF0ED" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={40} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`} />
                   <Tooltip
                     contentStyle={{ background: '#fff', border: '1px solid #E8E9E6', borderRadius: 12, fontSize: 12 }}
                     labelStyle={{ color: '#16181A', fontWeight: 600 }}
+                    cursor={{ stroke: '#C9CEC4', strokeWidth: 1 }}
                     formatter={(v) => [Number(v).toLocaleString(), 'Views']}
                   />
-                  <Line type="monotone" dataKey="views" stroke="#1F4D3A" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#1F4D3A' }} />
-                </LineChart>
+                  <Area type="monotone" dataKey="views" stroke="#1F4D3A" strokeWidth={2.5} fill="url(#combinedViews)" dot={false} activeDot={{ r: 4, fill: '#1F4D3A', stroke: '#fff', strokeWidth: 2 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Combined views — per day */}
+          {combinedPerDay.length >= 1 && (
+            <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+              <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4">Views per day (TikTok + Instagram)</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={combinedPerDay} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="combinedPerDay" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3F8F62" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#3F8F62" stopOpacity={0.5} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 4" stroke="#EEF0ED" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#A9AEA4' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={40} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`} />
+                  <Tooltip
+                    contentStyle={{ background: '#fff', border: '1px solid #E8E9E6', borderRadius: 12, fontSize: 12 }}
+                    labelStyle={{ color: '#16181A', fontWeight: 600 }}
+                    cursor={{ fill: 'rgba(46,107,79,0.06)' }}
+                    formatter={(v) => [Number(v).toLocaleString(), 'Views gained']}
+                  />
+                  <Bar dataKey="views" fill="url(#combinedPerDay)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           )}
 
           {/* Projects */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em]">
+            <div className="flex items-center gap-2.5 mb-4">
+              <h2 className="text-[18px] font-bold text-[#16181A] tracking-tight">
                 Projects
               </h2>
               {!loading && projects.length > 0 && (
-                <span className="text-[10px] font-semibold text-[#2E6B4F] bg-[#E8F2EC] rounded-full px-2.5 py-0.5">
+                <span className="text-[11px] font-semibold text-[#2E6B4F] bg-[#E8F2EC] rounded-full px-2.5 py-0.5">
                   {projects.length}
                 </span>
               )}
@@ -419,17 +469,26 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {projects.map((p) => {
-                  const stageIdx   = STAGES.indexOf(p.status);
-                  const stageLabel = STAGE_LABELS[p.status] ?? p.status;
-                  const stageStyle = STATUS_STYLES[p.status] ?? 'bg-[#F0F1EE] text-[#7C8278]';
+                  const stageIdx    = STAGES.indexOf(p.status);
+                  const stageLabel  = STAGE_LABELS[p.status] ?? p.status;
+                  const stageStyle  = STATUS_STYLES[p.status] ?? 'bg-[#F0F1EE] text-[#7C8278]';
+                  const stageAccent = STATUS_ACCENTS[p.status] ?? 'bg-[#C9CEC4]';
+                  const combined    = (p.tiktok_followers ?? 0) + (p.instagram_followers ?? 0);
+                  const vel         = velocity[p.id];
+                  const hasVel      = vel && vel.trend.length >= 2;
+                  const velUp       = hasVel && (vel.delta_pct === null || vel.delta_pct >= 0);
 
                   return (
                     <div
                       key={p.id}
                       onClick={() => router.push(`/project/${p.id}`)}
-                      className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)] cursor-pointer hover:border-[#3F8F62]/40 hover:shadow-[0_4px_24px_rgba(31,77,58,0.10)] hover:bg-[#FAFBFA] transition-all duration-200 group flex flex-col"
+                      className="relative overflow-hidden bg-white rounded-[20px] pl-6 pr-5 py-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)] cursor-pointer hover:border-[#3F8F62]/40 hover:shadow-[0_4px_24px_rgba(31,77,58,0.10)] hover:bg-[#FAFBFA] transition-all duration-200 group flex flex-col"
                     >
-                      <div className="flex items-start justify-between gap-3 mb-3">
+                      {/* Stage accent bar */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${stageAccent}`} />
+
+                      {/* Header zone */}
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           {p.tiktok_profile_pic_url && (
                             <img
@@ -440,11 +499,11 @@ export default function DashboardPage() {
                             />
                           )}
                           <div className="min-w-0">
-                            <p className="text-[15px] font-semibold text-[#16181A] group-hover:text-[#2E6B4F] transition-colors leading-snug">
+                            <p className="text-[15px] font-semibold text-[#16181A] group-hover:text-[#2E6B4F] transition-colors leading-snug truncate">
                               {p.client_name}
                             </p>
                             {p.niche && (
-                              <p className="text-[13px] text-[#7C8278] mt-0.5 truncate">{p.niche}</p>
+                              <p className="text-[12px] text-[#7C8278] mt-0.5 truncate">{p.niche}</p>
                             )}
                           </div>
                         </div>
@@ -467,8 +526,9 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
+                      {/* Platform zone */}
                       {(p.tiktok_handle || p.instagram_handle) && (
-                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
                           {p.tiktok_handle && (
                             <a
                               href={`https://www.tiktok.com/@${p.tiktok_handle}`}
@@ -515,63 +575,53 @@ export default function DashboardPage() {
                           )}
                           {p.tiktok_followers !== null && p.instagram_followers !== null && (
                             <span className="text-[11px] text-[#A9AEA4] font-medium">
-                              {fmt((p.tiktok_followers ?? 0) + (p.instagram_followers ?? 0))} combined
+                              {fmt(combined)} combined
                             </span>
                           )}
                         </div>
                       )}
 
-                      {(p.trends_count > 0 || p.ideas_count > 0) && (
-                        <div className="flex items-center gap-4 mb-3 pt-3 border-t border-[#E8E9E6]">
-                          {p.trends_count > 0 && (
-                            <div>
-                              <p className="text-[16px] font-bold text-[#2E6B4F]">{p.trends_count}</p>
-                              <p className="text-[10px] text-[#A9AEA4] uppercase tracking-wide font-medium">Trends</p>
-                            </div>
-                          )}
-                          {p.ideas_count > 0 && (
-                            <div>
-                              <p className="text-[16px] font-bold text-[#2E6B4F]">{p.ideas_count}</p>
-                              <p className="text-[10px] text-[#A9AEA4] uppercase tracking-wide font-medium">Ideas</p>
-                            </div>
-                          )}
-                          {p.approved_count > 0 && (
-                            <div>
-                              <p className="text-[16px] font-bold text-[#3F8F62]">{p.approved_count}</p>
-                              <p className="text-[10px] text-[#A9AEA4] uppercase tracking-wide font-medium">Approved</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {/* Metric strip — always 3 columns, consistent across cards */}
+                      <div className="grid grid-cols-3 mt-4 pt-4 border-t border-[#E8E9E6] divide-x divide-[#E8E9E6]">
+                        {([
+                          { label: 'Trends',   value: p.trends_count,   color: 'text-[#16181A]' },
+                          { label: 'Ideas',    value: p.ideas_count,    color: 'text-[#16181A]' },
+                          { label: 'Approved', value: p.approved_count, color: 'text-[#3F8F62]' },
+                        ] as const).map((m) => (
+                          <div key={m.label} className="flex flex-col items-center text-center px-1">
+                            <p className={`text-[20px] font-bold leading-none ${m.value > 0 ? m.color : 'text-[#D4D7D0]'}`}>
+                              {m.value > 0 ? m.value : '—'}
+                            </p>
+                            <p className="text-[10px] text-[#A9AEA4] uppercase tracking-[0.08em] font-semibold mt-1.5">{m.label}</p>
+                          </div>
+                        ))}
+                      </div>
 
-                      <div className="mt-auto">
+                      {/* Footer zone */}
+                      <div className="mt-4">
                         <StageProgress status={p.status} />
                         <div className="flex items-center justify-between mt-2">
-                          <p className="text-[11px] text-[#A9AEA4]">Step {stageIdx + 1} of {STAGES.length}</p>
+                          <p className="text-[11px] text-[#A9AEA4] font-medium">Step {stageIdx + 1} of {STAGES.length}</p>
                           <p className="text-[11px] text-[#A9AEA4]">
                             {new Date(p.created_at).toLocaleDateString('en-GB', {
                               day: 'numeric', month: 'short', year: 'numeric',
                             })}
                           </p>
                         </div>
-                        {velocity[p.id] && velocity[p.id].trend.length >= 2 && (() => {
-                          const { trend, delta_pct } = velocity[p.id];
-                          const up = delta_pct === null || delta_pct >= 0;
-                          return (
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E8E9E6]">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-[10px] text-[#A9AEA4] uppercase tracking-wide font-medium">View velocity</p>
-                                {delta_pct !== null && (
-                                  <span className={`flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${up ? 'bg-[#E8F2EC] text-[#2E6B4F]' : 'bg-red-50 text-red-500'}`}>
-                                    {up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                                    {Math.abs(delta_pct)}%
-                                  </span>
-                                )}
-                              </div>
-                              <MiniSparkline data={trend} up={up} />
+                        {hasVel && (
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E8E9E6]">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[10px] text-[#A9AEA4] uppercase tracking-[0.08em] font-semibold">View velocity</p>
+                              {vel.delta_pct !== null && (
+                                <span className={`flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${velUp ? 'bg-[#E8F2EC] text-[#2E6B4F]' : 'bg-red-50 text-red-500'}`}>
+                                  {velUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                                  {Math.abs(vel.delta_pct as number)}%
+                                </span>
+                              )}
                             </div>
-                          );
-                        })()}
+                            <MiniSparkline data={vel.trend} up={velUp} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

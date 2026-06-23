@@ -6,7 +6,10 @@ import { ideasPrompt } from '@/lib/prompts/ideas';
 import { criticPrompt } from '@/lib/prompts/critic';
 import { IdeasOutputSchema, CriticOutputSchema, type Idea } from '@/lib/schemas';
 
-const MAX_CRITIC_RETRIES = 2;
+const MAX_CRITIC_RETRIES = 1;
+
+const GEN_MODEL    = 'claude-opus-4-8';
+const CRITIC_MODEL = 'claude-haiku-4-5';
 
 const returnIdeasTool: Anthropic.Tool = {
   name: 'return_ideas',
@@ -167,7 +170,8 @@ export async function POST(req: NextRequest) {
       schema: IdeasOutputSchema,
       tools: [returnIdeasTool],
       toolChoice: { type: 'tool', name: 'return_ideas' },
-      temperature: 0.9,
+      model: GEN_MODEL,
+      effort: 'medium',
     });
 
     let currentIdeas: Idea[] = initialResult.ideas;
@@ -201,6 +205,7 @@ export async function POST(req: NextRequest) {
         schema: CriticOutputSchema,
         tools: [returnCritiqueTool],
         toolChoice: { type: 'tool', name: 'return_critique' },
+        model: CRITIC_MODEL,
         temperature: 0.2,
       });
 
@@ -243,7 +248,8 @@ export async function POST(req: NextRequest) {
         schema: IdeasOutputSchema,
         tools: [returnIdeasTool],
         toolChoice: { type: 'tool', name: 'return_ideas' },
-        temperature: 0.9,
+        model: GEN_MODEL,
+        effort: 'medium',
       });
 
       // Splice replacements in — preserve positions of kept ideas

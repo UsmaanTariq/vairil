@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutDashboard, RefreshCw, Eye, Heart, MessageCircle, Share2, TrendingUp } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, RefreshCw, Eye, Heart, MessageCircle, Share2, TrendingUp, UserRound, type LucideIcon } from 'lucide-react';
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar,
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
@@ -29,13 +29,15 @@ interface VideoStat {
   thumbnail_url:   string | null;
 }
 
-interface SnapshotBase { id: string; fetched_at: string; followers: number }
-interface TikTokSnapshot    extends SnapshotBase { video_count: number; videos?: VideoStat[] }
-interface InstagramSnapshot extends SnapshotBase { post_count:  number; posts?:  PostStat[]  }
+interface SnapshotBase { id: string; fetched_at: string; followers: number; views?: number }
+interface TikTokSnapshotTrend    extends SnapshotBase { video_count: number }
+interface InstagramSnapshotTrend extends SnapshotBase { post_count:  number }
+interface TikTokSnapshot    extends TikTokSnapshotTrend    { videos?: VideoStat[] }
+interface InstagramSnapshot extends InstagramSnapshotTrend { posts?:  PostStat[]  }
 
 interface AnalyticsData {
-  tiktok:    { account_id: string; handle: string | null; latest_snapshot: TikTokSnapshot | null;    snapshots: TikTokSnapshot[]    } | null;
-  instagram: { account_id: string; latest_snapshot: InstagramSnapshot | null; snapshots: InstagramSnapshot[] } | null;
+  tiktok:    { account_id: string; handle: string | null; latest_snapshot: TikTokSnapshot | null;    snapshots: TikTokSnapshotTrend[]    } | null;
+  instagram: { account_id: string; latest_snapshot: InstagramSnapshot | null; snapshots: InstagramSnapshotTrend[] } | null;
   handles:   { tiktok: string | null; instagram: string | null };
 }
 
@@ -56,6 +58,36 @@ const TOOLTIP_STYLE = {
   borderRadius: '12px', color: '#16181A', fontSize: '12px',
 };
 
+function StatCard({ label, value, icon: Icon, hero = false }: {
+  label: string; value: string; icon: LucideIcon; hero?: boolean;
+}) {
+  return (
+    <div className={`rounded-[20px] p-5 border ${
+      hero
+        ? 'bg-[#1F4D3A] border-[#1F4D3A] shadow-[0_4px_24px_rgba(31,77,58,0.20)]'
+        : 'bg-white border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]'
+    }`}>
+      <div className="flex items-center justify-between mb-4">
+        <p className={`text-[12px] ${hero ? 'text-[#7FBE9A]' : 'text-[#7C8278]'}`}>{label}</p>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${hero ? 'bg-white/10' : 'bg-[#E8F2EC]'}`}>
+          <Icon size={13} className={hero ? 'text-white' : 'text-[#1F4D3A]'} />
+        </div>
+      </div>
+      <p className={`text-[28px] font-bold leading-none ${hero ? 'text-white' : 'text-[#16181A]'}`}>{value}</p>
+    </div>
+  );
+}
+
+// Standard sub-panel / chart heading — matches the dashboard label system.
+const SECTION_LABEL = 'text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-4';
+
+// Shared recharts styling for a calm, consistent look across every chart.
+const AXIS = { tickLine: false, axisLine: false } as const;
+const GRID_H = { strokeDasharray: '4 4', stroke: '#EEF0ED', vertical: false } as const;
+const GRID_V = { strokeDasharray: '4 4', stroke: '#EEF0ED', horizontal: false } as const;
+const BAR_CURSOR = { fill: 'rgba(46,107,79,0.06)' } as const;
+const LINE_CURSOR = { stroke: '#C9CEC4', strokeWidth: 1 } as const;
+
 type TtSortKey = 'views' | 'likes' | 'comments' | 'shares' | 'engagement_rate';
 type IgSortKey = 'views' | 'likes' | 'comments' | 'engagement_rate';
 type Tab = 'tiktok' | 'instagram';
@@ -71,6 +103,9 @@ export default function ProjectAnalyticsPage() {
   const [ttDir, setTtDir]     = useState<'asc' | 'desc'>('desc');
   const [igSort, setIgSort]   = useState<IgSortKey>('likes');
   const [igDir, setIgDir]     = useState<'asc' | 'desc'>('desc');
+  const [ttPage, setTtPage] = useState(0);
+  const [igPage, setIgPage] = useState(0);
+  const PAGE_SIZE = 20;
   const [ttRefreshing, setTtRefreshing] = useState(false);
   const [igRefreshing, setIgRefreshing] = useState(false);
   const [ttRefreshErr, setTtRefreshErr] = useState('');
@@ -160,10 +195,12 @@ export default function ProjectAnalyticsPage() {
   function toggleTt(key: TtSortKey) {
     if (ttSort === key) setTtDir((d) => d === 'asc' ? 'desc' : 'asc');
     else { setTtSort(key); setTtDir('desc'); }
+    setTtPage(0);
   }
   function toggleIg(key: IgSortKey) {
     if (igSort === key) setIgDir((d) => d === 'asc' ? 'desc' : 'asc');
     else { setIgSort(key); setIgDir('desc'); }
+    setIgPage(0);
   }
 
   const card = 'bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]';
@@ -189,13 +226,25 @@ export default function ProjectAnalyticsPage() {
   const ttTrendData = ttSnaps.map((s) => ({
     date: new Date(s.fetched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     followers: s.followers,
-    views: (s.videos ?? []).reduce((acc, v) => acc + v.views, 0),
   }));
 
   const igTrendData = igSnaps.map((s) => ({
     date: new Date(s.fetched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     followers: s.followers,
-    views: (s.posts ?? []).reduce((acc, p) => acc + (p.views ?? 0), 0),
+  }));
+
+  const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+  // Cumulative = total lifetime views at each snapshot. Per-day = day-over-day gain (clamped at 0).
+  const ttViewsCumulative = ttSnaps.map((s) => ({ date: shortDate(s.fetched_at), views: s.views ?? 0 }));
+  const ttViewsPerDay = ttSnaps.slice(1).map((s, i) => ({
+    date: shortDate(s.fetched_at),
+    views: Math.max(0, (s.views ?? 0) - (ttSnaps[i].views ?? 0)),
+  }));
+  const igViewsCumulative = igSnaps.map((s) => ({ date: shortDate(s.fetched_at), views: s.views ?? 0 }));
+  const igViewsPerDay = igSnaps.slice(1).map((s, i) => ({
+    date: shortDate(s.fetched_at),
+    views: Math.max(0, (s.views ?? 0) - (igSnaps[i].views ?? 0)),
   }));
 
   const ttTopByViews = [...ttVideos].sort((a, b) => b.views - a.views).slice(0, 10).map((v, i) => ({
@@ -219,8 +268,10 @@ export default function ProjectAnalyticsPage() {
   const topTtVideo = [...ttVideos].sort((a, b) => b.views - a.views)[0] ?? null;
   const topIgPost  = [...igPosts].sort((a, b) => b.likes - a.likes)[0] ?? null;
 
-  const hasTikTok    = Boolean(data?.tiktok    || data?.handles?.tiktok);
-  const hasInstagram = Boolean(data?.instagram || data?.handles?.instagram);
+  // "Linked" means a real account record exists — a leftover handle string with no
+  // account row (e.g. the row was deleted in the DB) must still expose the Add form.
+  const hasTikTok    = Boolean(data?.tiktok);
+  const hasInstagram = Boolean(data?.instagram);
 
   return (
     <div className="min-h-screen bg-[#F3F4F2] dot-grid">
@@ -267,57 +318,47 @@ export default function ProjectAnalyticsPage() {
           ) : (
             <>
               {/* Header */}
-              <div className={card}>
-                <h1 className="text-[22px] font-bold text-[#16181A] mb-4">Analytics</h1>
-                <div className="flex gap-8 flex-wrap">
-                  {[
-                    { label: 'Combined views',  value: fmt(combinedViews || null) },
-                    { label: 'Total followers', value: fmt(totalFollowers || null) },
-                    { label: 'Avg engagement',  value: `${(combinedAvgEng * 100).toFixed(2)}%` },
-                  ].map(({ label, value }) => (
-                    <div key={label}>
-                      <p className="text-[10px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em] mb-1">{label}</p>
-                      <p className="text-[20px] font-bold text-[#16181A]">{value}</p>
-                    </div>
-                  ))}
-                </div>
+              <h1 className="text-[22px] font-bold text-[#16181A] tracking-tight">Analytics</h1>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <StatCard label="Combined views"  value={fmt(combinedViews || null)}             icon={Eye}        hero />
+                <StatCard label="Total followers" value={fmt(totalFollowers || null)}            icon={UserRound} />
+                <StatCard label="Avg engagement"  value={`${(combinedAvgEng * 100).toFixed(2)}%`} icon={TrendingUp} />
               </div>
 
-              {/* Platform tabs */}
-              {(hasTikTok || hasInstagram) && (
+              {/* Platform tabs — both always shown so an unlinked platform can be added */}
+              {(
                 <div className="flex gap-2">
-                  {hasTikTok && (
+                  {([
+                    { key: 'tiktok'    as Tab, label: 'TikTok',    linked: hasTikTok },
+                    { key: 'instagram' as Tab, label: 'Instagram', linked: hasInstagram },
+                  ]).map(({ key, label, linked }) => (
                     <button
-                      onClick={() => setTab('tiktok')}
-                      className={`h-10 px-6 rounded-xl text-[13px] font-semibold transition-colors ${
-                        tab === 'tiktok'
+                      key={key}
+                      onClick={() => setTab(key)}
+                      className={`h-10 px-6 rounded-xl text-[13px] font-semibold transition-colors inline-flex items-center gap-2 ${
+                        tab === key
                           ? 'bg-[#1F4D3A] text-white shadow-sm'
                           : 'bg-white border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F]'
                       }`}
                     >
-                      TikTok
+                      {label}
+                      {!linked && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                          tab === key ? 'bg-white/15 text-white/80' : 'bg-[#F0F1EE] text-[#A9AEA4]'
+                        }`}>
+                          + Add
+                        </span>
+                      )}
                     </button>
-                  )}
-                  {hasInstagram && (
-                    <button
-                      onClick={() => setTab('instagram')}
-                      className={`h-10 px-6 rounded-xl text-[13px] font-semibold transition-colors ${
-                        tab === 'instagram'
-                          ? 'bg-[#1F4D3A] text-white shadow-sm'
-                          : 'bg-white border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F]'
-                      }`}
-                    >
-                      Instagram
-                    </button>
-                  )}
+                  ))}
                 </div>
               )}
 
               {/* TikTok tab */}
               {tab === 'tiktok' && hasTikTok && data?.tiktok && (
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-6 flex-wrap">
+                  <div className={`${card} flex items-center justify-between gap-4 flex-wrap`}>
+                    <div className="flex gap-8 flex-wrap">
                       {[
                         { label: 'Followers',      value: fmt(ttSnap?.followers ?? null) },
                         { label: 'Videos',         value: fmt(ttSnap?.video_count ?? null) },
@@ -341,50 +382,108 @@ export default function ProjectAnalyticsPage() {
                   </div>
 
                   {ttTrendData.length > 0 && (
+                    <div className={card}>
+                      <p className={SECTION_LABEL}>Follower trend</p>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={ttTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="ttFollowers" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.22} />
+                              <stop offset="100%" stopColor="#2E6B4F" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid {...GRID_H} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                          <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                          <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
+                          <Area type="monotone" dataKey="followers" stroke="#2E6B4F" strokeWidth={2.5} fill="url(#ttFollowers)" dot={false} activeDot={{ r: 4, fill: '#2E6B4F', stroke: '#fff', strokeWidth: 2 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {ttViewsCumulative.some((d) => d.views > 0) && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {[
-                        { title: 'Follower trend', key: 'followers' as const, label: 'Followers', color: '#2E6B4F' },
-                        { title: 'Total views over time', key: 'views' as const, label: 'Views', color: '#3F8F62' },
-                      ].map(({ title, key, label, color }) => (
-                        <div key={key} className={card}>
-                          <p className="text-[12px] font-semibold text-[#7C8278] mb-4">{title}</p>
-                          <ResponsiveContainer width="100%" height={180}>
-                            <LineChart data={ttTrendData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7C8278' }} />
-                              <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                              <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), label]} contentStyle={TOOLTIP_STYLE} />
-                              <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} />
-                            </LineChart>
+                      <div className={card}>
+                        <p className={SECTION_LABEL}>Cumulative views</p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={ttViewsCumulative} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="ttViewsCum" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.22} />
+                                <stop offset="100%" stopColor="#2E6B4F" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_H} />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                            <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Total views']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
+                            <Area type="monotone" dataKey="views" stroke="#2E6B4F" strokeWidth={2.5} fill="url(#ttViewsCum)" dot={false} activeDot={{ r: 4, fill: '#2E6B4F', stroke: '#fff', strokeWidth: 2 }} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className={card}>
+                        <p className={SECTION_LABEL}>Views per day</p>
+                        {ttViewsPerDay.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={ttViewsPerDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="ttViewsDay" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#3F8F62" stopOpacity={1} />
+                                  <stop offset="100%" stopColor="#3F8F62" stopOpacity={0.5} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid {...GRID_H} />
+                              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                              <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                              <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Views gained']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                              <Bar dataKey="views" fill="url(#ttViewsDay)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                            </BarChart>
                           </ResponsiveContainer>
-                        </div>
-                      ))}
+                        ) : (
+                          <div className="h-[200px] flex items-center justify-center">
+                            <p className="text-[13px] text-[#A9AEA4]">Need at least two snapshots to show daily change.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
                   {ttVideos.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div className={card}>
-                        <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Top videos by views</p>
-                        <ResponsiveContainer width="100%" height={Math.max(200, ttTopByViews.length * 36)}>
-                          <BarChart layout="vertical" data={ttTopByViews}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" horizontal={false} />
-                            <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} />
-                            <YAxis type="category" dataKey="title" width={130} tick={{ fontSize: 10, fill: '#7C8278' }} />
-                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Views']} contentStyle={TOOLTIP_STYLE} />
-                            <Bar dataKey="views" fill="#2E6B4F" radius={[0, 4, 4, 0]} />
+                        <p className={SECTION_LABEL}>Top videos by views</p>
+                        <ResponsiveContainer width="100%" height={Math.max(200, ttTopByViews.length * 38)}>
+                          <BarChart layout="vertical" data={ttTopByViews} margin={{ left: 0, right: 12 }}>
+                            <defs>
+                              <linearGradient id="ttBar" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.8} />
+                                <stop offset="100%" stopColor="#3F8F62" stopOpacity={1} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_V} />
+                            <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                            <YAxis type="category" dataKey="title" width={130} tick={{ fontSize: 10, fill: '#7C8278' }} {...AXIS} />
+                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Views']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                            <Bar dataKey="views" fill="url(#ttBar)" radius={[0, 6, 6, 0]} barSize={16} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                       <div className={card}>
-                        <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Engagement rate (%)</p>
+                        <p className={SECTION_LABEL}>Engagement rate (%)</p>
                         <ResponsiveContainer width="100%" height={280}>
-                          <BarChart data={ttByEngagement}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                            <XAxis dataKey="title" tick={{ fontSize: 10, fill: '#7C8278' }} interval={0} angle={-30} textAnchor="end" height={60} />
-                            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                            <Tooltip formatter={(v) => [typeof v === 'number' ? `${v}%` : '—', 'Engagement']} contentStyle={TOOLTIP_STYLE} />
-                            <Bar dataKey="rate" fill="#3F8F62" radius={[4, 4, 0, 0]} />
+                          <BarChart data={ttByEngagement} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="ttEng" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#3F8F62" stopOpacity={1} />
+                                <stop offset="100%" stopColor="#3F8F62" stopOpacity={0.5} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_H} />
+                            <XAxis dataKey="title" tick={{ fontSize: 10, fill: '#A9AEA4' }} interval={0} angle={-30} textAnchor="end" height={60} {...AXIS} />
+                            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} {...AXIS} />
+                            <Tooltip formatter={(v) => [typeof v === 'number' ? `${v}%` : '—', 'Engagement']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                            <Bar dataKey="rate" fill="url(#ttEng)" radius={[6, 6, 0, 0]} maxBarSize={40} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -406,25 +505,42 @@ export default function ProjectAnalyticsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...ttVideos].sort((a, b) => {
-                            const av = a[ttSort], bv = b[ttSort];
-                            return (ttDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
-                          }).map((v, i, arr) => (
-                            <tr key={v.video_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < arr.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
-                              <td className="px-5 py-3 text-[13px] text-[#16181A] max-w-[200px]">
-                                {v.title && data?.tiktok?.handle
-                                  ? <a href={`https://www.tiktok.com/@${data.tiktok.handle}/video/${v.video_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#2E6B4F] hover:underline">{v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title}</a>
-                                  : v.title ? (v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title) : <span className="text-[#A9AEA4]">—</span>}
-                              </td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.views)}</td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.likes)}</td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.comments)}</td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.shares)}</td>
-                              <td className="px-5 py-3 text-[13px] font-medium text-[#2E6B4F]">{(v.engagement_rate * 100).toFixed(2)}%</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const sorted = [...ttVideos].sort((a, b) => {
+                              const av = a[ttSort], bv = b[ttSort];
+                              return (ttDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
+                            });
+                            const page = sorted.slice(ttPage * PAGE_SIZE, (ttPage + 1) * PAGE_SIZE);
+                            return page.map((v, i) => (
+                              <tr key={v.video_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < page.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
+                                <td className="px-5 py-3 text-[13px] text-[#16181A] max-w-[200px]">
+                                  {v.title && data?.tiktok?.handle
+                                    ? <a href={`https://www.tiktok.com/@${data.tiktok.handle}/video/${v.video_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#2E6B4F] hover:underline">{v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title}</a>
+                                    : v.title ? (v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title) : <span className="text-[#A9AEA4]">—</span>}
+                                </td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.views)}</td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.likes)}</td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.comments)}</td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(v.shares)}</td>
+                                <td className="px-5 py-3 text-[13px] font-medium text-[#2E6B4F]">{(v.engagement_rate * 100).toFixed(2)}%</td>
+                              </tr>
+                            ));
+                          })()}
                         </tbody>
                       </table>
+                      {ttVideos.length > PAGE_SIZE && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8E9E6]">
+                          <span className="text-[12px] text-[#A9AEA4]">
+                            {ttPage * PAGE_SIZE + 1}–{Math.min((ttPage + 1) * PAGE_SIZE, ttVideos.length)} of {ttVideos.length}
+                          </span>
+                          <div className="flex gap-2">
+                            <button disabled={ttPage === 0} onClick={() => setTtPage((p) => p - 1)}
+                              className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Prev</button>
+                            <button disabled={(ttPage + 1) * PAGE_SIZE >= ttVideos.length} onClick={() => setTtPage((p) => p + 1)}
+                              className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -439,8 +555,8 @@ export default function ProjectAnalyticsPage() {
               {/* Instagram tab */}
               {tab === 'instagram' && hasInstagram && data?.instagram && (
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-6 flex-wrap">
+                  <div className={`${card} flex items-center justify-between gap-4 flex-wrap`}>
+                    <div className="flex gap-8 flex-wrap">
                       {[
                         { label: 'Followers',      value: fmt(igSnap?.followers ?? null) },
                         { label: 'Posts',          value: fmt(igSnap?.post_count ?? null) },
@@ -464,50 +580,108 @@ export default function ProjectAnalyticsPage() {
                   </div>
 
                   {igTrendData.length > 0 && (
+                    <div className={card}>
+                      <p className={SECTION_LABEL}>Follower trend</p>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={igTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="igFollowers" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.22} />
+                              <stop offset="100%" stopColor="#2E6B4F" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid {...GRID_H} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                          <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                          <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
+                          <Area type="monotone" dataKey="followers" stroke="#2E6B4F" strokeWidth={2.5} fill="url(#igFollowers)" dot={false} activeDot={{ r: 4, fill: '#2E6B4F', stroke: '#fff', strokeWidth: 2 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {igViewsCumulative.some((d) => d.views > 0) && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {[
-                        { title: 'Follower trend', key: 'followers' as const, label: 'Followers', color: '#2E6B4F' },
-                        { title: 'Total views over time', key: 'views' as const, label: 'Views', color: '#3F8F62' },
-                      ].map(({ title, key, label, color }) => (
-                        <div key={key} className={card}>
-                          <p className="text-[12px] font-semibold text-[#7C8278] mb-4">{title}</p>
-                          <ResponsiveContainer width="100%" height={180}>
-                            <LineChart data={igTrendData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7C8278' }} />
-                              <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                              <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), label]} contentStyle={TOOLTIP_STYLE} />
-                              <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} />
-                            </LineChart>
+                      <div className={card}>
+                        <p className={SECTION_LABEL}>Cumulative views</p>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={igViewsCumulative} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="igViewsCum" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.22} />
+                                <stop offset="100%" stopColor="#2E6B4F" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_H} />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                            <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Total views']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
+                            <Area type="monotone" dataKey="views" stroke="#2E6B4F" strokeWidth={2.5} fill="url(#igViewsCum)" dot={false} activeDot={{ r: 4, fill: '#2E6B4F', stroke: '#fff', strokeWidth: 2 }} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className={card}>
+                        <p className={SECTION_LABEL}>Views per day</p>
+                        {igViewsPerDay.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={igViewsPerDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="igViewsDay" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#3F8F62" stopOpacity={1} />
+                                  <stop offset="100%" stopColor="#3F8F62" stopOpacity={0.5} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid {...GRID_H} />
+                              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                              <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} width={44} {...AXIS} />
+                              <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Views gained']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                              <Bar dataKey="views" fill="url(#igViewsDay)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                            </BarChart>
                           </ResponsiveContainer>
-                        </div>
-                      ))}
+                        ) : (
+                          <div className="h-[200px] flex items-center justify-center">
+                            <p className="text-[13px] text-[#A9AEA4]">Need at least two snapshots to show daily change.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
                   {igPosts.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div className={card}>
-                        <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Top posts by likes</p>
-                        <ResponsiveContainer width="100%" height={Math.max(200, igTopByLikes.length * 36)}>
-                          <BarChart layout="vertical" data={igTopByLikes}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" horizontal={false} />
-                            <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} />
-                            <YAxis type="category" dataKey="title" width={130} tick={{ fontSize: 10, fill: '#7C8278' }} />
-                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Likes']} contentStyle={TOOLTIP_STYLE} />
-                            <Bar dataKey="likes" fill="#2E6B4F" radius={[0, 4, 4, 0]} />
+                        <p className={SECTION_LABEL}>Top posts by likes</p>
+                        <ResponsiveContainer width="100%" height={Math.max(200, igTopByLikes.length * 38)}>
+                          <BarChart layout="vertical" data={igTopByLikes} margin={{ left: 0, right: 12 }}>
+                            <defs>
+                              <linearGradient id="igBar" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor="#2E6B4F" stopOpacity={0.8} />
+                                <stop offset="100%" stopColor="#3F8F62" stopOpacity={1} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_V} />
+                            <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 11, fill: '#A9AEA4' }} {...AXIS} />
+                            <YAxis type="category" dataKey="title" width={130} tick={{ fontSize: 10, fill: '#7C8278' }} {...AXIS} />
+                            <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Likes']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                            <Bar dataKey="likes" fill="url(#igBar)" radius={[0, 6, 6, 0]} barSize={16} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                       <div className={card}>
-                        <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Engagement rate (%)</p>
+                        <p className={SECTION_LABEL}>Engagement rate (%)</p>
                         <ResponsiveContainer width="100%" height={280}>
-                          <BarChart data={igByEngagement}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                            <XAxis dataKey="title" tick={{ fontSize: 10, fill: '#7C8278' }} interval={0} angle={-30} textAnchor="end" height={60} />
-                            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                            <Tooltip formatter={(v) => [typeof v === 'number' ? `${v}%` : '—', 'Engagement']} contentStyle={TOOLTIP_STYLE} />
-                            <Bar dataKey="rate" fill="#3F8F62" radius={[4, 4, 0, 0]} />
+                          <BarChart data={igByEngagement} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="igEng" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#3F8F62" stopOpacity={1} />
+                                <stop offset="100%" stopColor="#3F8F62" stopOpacity={0.5} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid {...GRID_H} />
+                            <XAxis dataKey="title" tick={{ fontSize: 10, fill: '#A9AEA4' }} interval={0} angle={-30} textAnchor="end" height={60} {...AXIS} />
+                            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: '#A9AEA4' }} domain={['auto', 'auto']} {...AXIS} />
+                            <Tooltip formatter={(v) => [typeof v === 'number' ? `${v}%` : '—', 'Engagement']} contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                            <Bar dataKey="rate" fill="url(#igEng)" radius={[6, 6, 0, 0]} maxBarSize={40} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -529,25 +703,42 @@ export default function ProjectAnalyticsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...igPosts].sort((a, b) => {
-                            const av = igSort === 'views' ? (a.views ?? -1) : a[igSort];
-                            const bv = igSort === 'views' ? (b.views ?? -1) : b[igSort];
-                            return (igDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
-                          }).map((p, i, arr) => (
-                            <tr key={p.post_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < arr.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
-                              <td className="px-5 py-3 text-[13px] text-[#16181A] max-w-[200px]">
-                                {p.caption && p.post_id
-                                  ? <a href={`https://www.instagram.com/p/${p.post_id}/`} target="_blank" rel="noopener noreferrer" className="hover:text-[#2E6B4F] hover:underline">{p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption}</a>
-                                  : p.caption ? (p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption) : <span className="text-[#A9AEA4]">—</span>}
-                              </td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{p.views !== null ? fmt(p.views) : '—'}</td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(p.likes)}</td>
-                              <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(p.comments)}</td>
-                              <td className="px-5 py-3 text-[13px] font-medium text-[#2E6B4F]">{(p.engagement_rate * 100).toFixed(2)}%</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const sorted = [...igPosts].sort((a, b) => {
+                              const av = igSort === 'views' ? (a.views ?? -1) : a[igSort];
+                              const bv = igSort === 'views' ? (b.views ?? -1) : b[igSort];
+                              return (igDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
+                            });
+                            const page = sorted.slice(igPage * PAGE_SIZE, (igPage + 1) * PAGE_SIZE);
+                            return page.map((p, i) => (
+                              <tr key={p.post_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < page.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
+                                <td className="px-5 py-3 text-[13px] text-[#16181A] max-w-[200px]">
+                                  {p.caption && p.post_id
+                                    ? <a href={`https://www.instagram.com/p/${p.post_id}/`} target="_blank" rel="noopener noreferrer" className="hover:text-[#2E6B4F] hover:underline">{p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption}</a>
+                                    : p.caption ? (p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption) : <span className="text-[#A9AEA4]">—</span>}
+                                </td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{p.views !== null ? fmt(p.views) : '—'}</td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(p.likes)}</td>
+                                <td className="px-5 py-3 text-[13px] text-[#7C8278]">{fmt(p.comments)}</td>
+                                <td className="px-5 py-3 text-[13px] font-medium text-[#2E6B4F]">{(p.engagement_rate * 100).toFixed(2)}%</td>
+                              </tr>
+                            ));
+                          })()}
                         </tbody>
                       </table>
+                      {igPosts.length > PAGE_SIZE && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8E9E6]">
+                          <span className="text-[12px] text-[#A9AEA4]">
+                            {igPage * PAGE_SIZE + 1}–{Math.min((igPage + 1) * PAGE_SIZE, igPosts.length)} of {igPosts.length}
+                          </span>
+                          <div className="flex gap-2">
+                            <button disabled={igPage === 0} onClick={() => setIgPage((p) => p - 1)}
+                              className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Prev</button>
+                            <button disabled={(igPage + 1) * PAGE_SIZE >= igPosts.length} onClick={() => setIgPage((p) => p + 1)}
+                              className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -565,10 +756,14 @@ export default function ProjectAnalyticsPage() {
               )}
 
               {/* TikTok tab — handle not yet set */}
-              {tab === 'tiktok' && !data?.handles?.tiktok && (
+              {tab === 'tiktok' && !data?.tiktok && (
                 <div className={card}>
                   <p className="text-[15px] font-semibold text-[#16181A] mb-1">No TikTok account linked</p>
-                  <p className="text-[13px] text-[#7C8278] mb-4">Add a handle to start tracking.</p>
+                  <p className="text-[13px] text-[#7C8278] mb-4">
+                    {data?.handles?.tiktok
+                      ? <>Handle <span className="font-semibold text-[#16181A]">@{data.handles.tiktok}</span> is set but no account is being tracked. Enter the correct handle to relink.</>
+                      : 'Add a handle to start tracking.'}
+                  </p>
                   <div className="flex gap-2">
                     <input value={ttHandle} onChange={(e) => setTtHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkTikTok()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
                     <button onClick={linkTikTok} disabled={ttLinking || !ttHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{ttLinking ? 'Saving…' : 'Link'}</button>
@@ -577,11 +772,15 @@ export default function ProjectAnalyticsPage() {
                 </div>
               )}
 
-              {/* Instagram tab — handle not yet set */}
-              {tab === 'instagram' && !data?.handles?.instagram && (
+              {/* Instagram tab — no account record (handle unset, or set but the row is gone) */}
+              {tab === 'instagram' && !data?.instagram && (
                 <div className={card}>
                   <p className="text-[15px] font-semibold text-[#16181A] mb-1">No Instagram account linked</p>
-                  <p className="text-[13px] text-[#7C8278] mb-4">Add a handle to start tracking.</p>
+                  <p className="text-[13px] text-[#7C8278] mb-4">
+                    {data?.handles?.instagram
+                      ? <>Handle <span className="font-semibold text-[#16181A]">@{data.handles.instagram}</span> is set but no account is being tracked. Enter the correct handle to relink.</>
+                      : 'Add a handle to start tracking.'}
+                  </p>
                   <div className="flex gap-2">
                     <input value={igHandle} onChange={(e) => setIgHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkInstagram()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
                     <button onClick={linkInstagram} disabled={igLinking || !igHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{igLinking ? 'Saving…' : 'Link'}</button>
@@ -590,30 +789,6 @@ export default function ProjectAnalyticsPage() {
                 </div>
               )}
 
-              {!hasTikTok && !hasInstagram && (
-                <div className={card}>
-                  <p className="text-[15px] font-semibold text-[#16181A] mb-1">No accounts linked</p>
-                  <p className="text-[13px] text-[#7C8278] mb-5">Add a handle to start tracking analytics.</p>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
-                      <p className="text-[11px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em]">TikTok handle</p>
-                      <div className="flex gap-2">
-                        <input value={ttHandle} onChange={(e) => setTtHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkTikTok()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
-                        <button onClick={linkTikTok} disabled={ttLinking || !ttHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{ttLinking ? 'Saving…' : 'Link'}</button>
-                      </div>
-                      {ttLinkErr && <p className="text-[12px] text-red-500">{ttLinkErr}</p>}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <p className="text-[11px] font-semibold text-[#A9AEA4] uppercase tracking-[0.1em]">Instagram handle</p>
-                      <div className="flex gap-2">
-                        <input value={igHandle} onChange={(e) => setIgHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && linkInstagram()} placeholder="@handle" className="flex-1 h-10 px-4 rounded-xl bg-[#F3F4F2] border border-[#E8E9E6] text-[14px] text-[#16181A] placeholder-[#A9AEA4] focus:outline-none focus:border-[#2E6B4F]/50 transition-colors" />
-                        <button onClick={linkInstagram} disabled={igLinking || !igHandle.trim()} className="h-10 px-5 rounded-xl bg-[#1F4D3A] hover:bg-[#183D2E] disabled:opacity-40 text-white text-[13px] font-semibold transition-colors">{igLinking ? 'Saving…' : 'Link'}</button>
-                      </div>
-                      {igLinkErr && <p className="text-[12px] text-red-500">{igLinkErr}</p>}
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </main>

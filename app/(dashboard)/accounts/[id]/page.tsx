@@ -30,7 +30,6 @@ interface SnapshotTrend {
   fetched_at: string;
   followers: number;
   video_count: number;
-  videos?: VideoStat[];
 }
 
 interface LatestSnapshot extends SnapshotTrend {
@@ -76,10 +75,13 @@ export default function AccountDetailPage() {
   const [error, setError] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('views');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [tablePage, setTablePage] = useState(0);
+  const PAGE_SIZE = 50;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('desc'); }
+    setTablePage(0);
   }
 
   useEffect(() => {
@@ -100,7 +102,6 @@ export default function AccountDetailPage() {
   const trendData = snapshots.map((s) => ({
     date: new Date(s.fetched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     followers: s.followers,
-    views: (s.videos ?? []).reduce((acc, v) => acc + v.views, 0),
   }));
 
   const topByViews = [...videos]
@@ -194,33 +195,19 @@ export default function AccountDetailPage() {
                 </div>
               </div>
 
-              {/* Trend charts */}
+              {/* Trend chart */}
               {trendData.length >= 2 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-                    <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Follower trend</p>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={trendData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7C8278' }} />
-                        <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                        <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} />
-                        <Line type="monotone" dataKey="followers" stroke="#2E6B4F" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-                    <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Total views over time</p>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={trendData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7C8278' }} />
-                        <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
-                        <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Views']} contentStyle={TOOLTIP_STYLE} />
-                        <Line type="monotone" dataKey="views" stroke="#3F8F62" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="bg-white rounded-[20px] p-5 border border-[#E8E9E6] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+                  <p className="text-[12px] font-semibold text-[#7C8278] mb-4">Follower trend</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={trendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E8E9E6" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7C8278' }} />
+                      <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: '#7C8278' }} domain={['auto', 'auto']} />
+                      <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} />
+                      <Line type="monotone" dataKey="followers" stroke="#2E6B4F" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               )}
 
@@ -282,15 +269,16 @@ export default function AccountDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {[...videos]
-                        .sort((a, b) => {
+                      {(() => {
+                        const sorted = [...videos].sort((a, b) => {
                           const av = a[sortKey];
                           const bv = b[sortKey];
                           const cmp = av < bv ? -1 : av > bv ? 1 : 0;
                           return sortDir === 'asc' ? cmp : -cmp;
-                        })
-                        .map((v, i, arr) => (
-                          <tr key={v.video_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < arr.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
+                        });
+                        const page = sorted.slice(tablePage * PAGE_SIZE, (tablePage + 1) * PAGE_SIZE);
+                        return page.map((v, i) => (
+                          <tr key={v.video_id} className={`hover:bg-[#F3F4F2] transition-colors ${i < page.length - 1 ? 'border-b border-[#E8E9E6]' : ''}`}>
                             <td className="px-6 py-3 text-[13px] text-[#16181A] max-w-[240px]">
                               {v.title ? (v.title.length > 60 ? v.title.slice(0, 60) + '…' : v.title) : <span className="text-[#A9AEA4]">—</span>}
                             </td>
@@ -302,9 +290,33 @@ export default function AccountDetailPage() {
                               {(v.engagement_rate * 100).toFixed(2)}%
                             </td>
                           </tr>
-                        ))}
+                        ));
+                      })()}
                     </tbody>
                   </table>
+                  {videos.length > PAGE_SIZE && (
+                    <div className="flex items-center justify-between px-6 py-3 border-t border-[#E8E9E6]">
+                      <span className="text-[12px] text-[#A9AEA4]">
+                        {tablePage * PAGE_SIZE + 1}–{Math.min((tablePage + 1) * PAGE_SIZE, videos.length)} of {videos.length}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          disabled={tablePage === 0}
+                          onClick={() => setTablePage((p) => p - 1)}
+                          className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Prev
+                        </button>
+                        <button
+                          disabled={(tablePage + 1) * PAGE_SIZE >= videos.length}
+                          onClick={() => setTablePage((p) => p + 1)}
+                          className="px-3 py-1.5 text-[12px] rounded-lg border border-[#E8E9E6] text-[#7C8278] hover:border-[#2E6B4F]/50 hover:text-[#2E6B4F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

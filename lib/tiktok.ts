@@ -43,23 +43,21 @@ export async function getProfile(handle: string): Promise<TikTokProfile> {
 
 export async function getVideos(secUid: string): Promise<TikTokVideoStat[]> {
   const allItems: Record<string, unknown>[] = [];
-  let cursor = 0;
-  const MAX_PAGES = 10;
+  let cursor: string | number = 0;
+  const MAX_PAGES = 30;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await fetch(
-      `${BASE}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=30&cursor=${cursor}`,
+      `${BASE}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=35&cursor=${cursor}`,
       { headers: HEADERS }
     );
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`TikTok videos fetch failed (${res.status}): ${body}`);
-    }
+    // On a bad page, return whatever we have rather than discarding everything
+    if (!res.ok) break;
     const json = await res.json();
     const items: Record<string, unknown>[] = json.data?.itemList ?? [];
     allItems.push(...items);
     if (!json.data?.hasMore || items.length === 0) break;
-    cursor = json.data.cursor as number;
+    cursor = json.data.cursor as string | number;
   }
 
   return allItems.map((v) => {

@@ -54,21 +54,36 @@ export async function getProfile(handle: string): Promise<InstagramProfile> {
   };
 }
 
-export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
-  const data  = await fetchProfileData(userId);
-  const media = data.edge_owner_to_timeline_media as Record<string, unknown>;
-  const edges = (media?.edges ?? []) as Array<{ node: Record<string, unknown> }>;
+// The /profile endpoint only returns the first ~12 posts. The /user-feeds endpoint
+// is paginated via `next_max_id` (passed back as `max_id`) — page through it to get
+// the full post history. Each page returns ~12 items, so MAX_PAGES caps both the
+// post total and the number of upstream API calls per refresh.
+const MAX_PAGES = 20;
 
-  return edges.map((edge) => {
-    const node     = edge.node;
-    const isVideo  = Boolean(node.is_video);
-    const views    = isVideo && node.video_view_count != null ? (node.video_view_count as number) : null;
-    const likes    = ((node.edge_liked_by as Record<string, number>)?.count
-                   ?? (node.edge_media_preview_like as Record<string, number>)?.count
-                   ?? 0);
-    const comments = (node.edge_media_to_comment as Record<string, number>)?.count ?? 0;
-    const captionEdges = ((node.edge_media_to_caption as Record<string, unknown>)?.edges ?? []) as Array<{ node: { text: string } }>;
-    const caption  = captionEdges[0]?.node?.text ?? '';
+export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
+  const allItems: Record<string, unknown>[] = [];
+  let maxId = '';
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url = `${BASE}/user-feeds?id=${encodeURIComponent(userId)}&count=50` +
+                (maxId ? `&max_id=${encodeURIComponent(maxId)}` : '');
+    const res = await fetch(url, { headers: HEADERS });
+    // On a bad page, keep whatever we've collected rather than discarding everything.
+    if (!res.ok) break;
+    const json = await res.json();
+    const items: Record<string, unknown>[] = json.items ?? [];
+    allItems.push(...items);
+    if (!json.more_available || items.length === 0 || !json.next_max_id) break;
+    maxId = String(json.next_max_id);
+  }
+
+  return allItems.map((item) => {
+    const isVideo  = Number(item.media_type) === 2;
+    const views    = isVideo ? ((item.play_count ?? item.ig_play_count ?? null) as number | null) : null;
+    const likes    = (item.like_count    as number) ?? 0;
+    const comments = (item.comment_count as number) ?? 0;
+    const caption  = ((item.caption as { text?: string } | null)?.text) ?? '';
+    const candidates = ((item.image_versions2 as { candidates?: Array<{ url?: string }> } | null)?.candidates) ?? [];
 
     const engBase  = views ?? 0;
     const engagement_rate = engBase > 0
@@ -76,13 +91,13 @@ export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
       : 0;
 
     return {
-      post_id:       String(node.shortcode ?? node.id ?? ''),
+      post_id:       String(item.code ?? item.pk ?? ''),
       caption:       [...caption].slice(0, 300).join(''),
       views,
       likes,
       comments,
       engagement_rate,
-      thumbnail_url: (node.display_url ?? node.thumbnail_src ?? null) as string | null,
+      thumbnail_url: (candidates[0]?.url ?? null) as string | null,
     };
   });
 }
