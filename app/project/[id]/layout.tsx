@@ -22,11 +22,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   }, [id]);
 
   useEffect(() => {
-    fetch(`/api/projects/${id}`)
-      .then((r) => r.json())
-      .then((d: { project?: Project }) => setProject(d.project ?? null))
-      .finally(() => setLoading(false));
-  }, [id]);
+    refresh().finally(() => setLoading(false));
+  }, [refresh]);
 
   const setOnboarded = useCallback(() => {
     setProject((p) => (p ? { ...p, onboarded: true } : p));

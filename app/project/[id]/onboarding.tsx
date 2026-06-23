@@ -53,8 +53,8 @@ export function Onboarding() {
       {step === "synthesis" && (
         <SynthesisStage
           projectId={project.id}
-          onUpdate={(u) => {
-            if (u.status === "research") finishOnboarding();
+          onUpdate={async (u) => {
+            if (u.status === "research") await finishOnboarding();
             else if (u.status === "interview") setStep("interview");
           }}
         />
