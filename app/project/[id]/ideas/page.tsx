@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { GenerationProgress } from '@/components/generation-progress';
-import { IDEAS_GENERATION_STEPS, IDEAS_REGEN_ONE_STEPS } from '@/lib/generation-steps';
+import { IDEAS_GENERATION_STEPS } from '@/lib/generation-steps';
 
 interface Idea {
   id: string;
@@ -20,47 +20,57 @@ interface Idea {
   caption: string;
   hashtags: string[];
   why: string;
-  status: 'draft' | 'approved';
+  status: 'new' | 'approved' | 'rejected';
+  feedbackReason: string | null;
 }
 
-interface GenerateMeta {
-  criticRounds: number;
-  regeneratedCount: number;
-}
+type ViewFilter = 'new' | 'approved' | 'rejected';
+
+const DISLIKE_REASONS = ['too generic', 'off-brand', 'not my style', 'seen it before'];
 
 export default function IdeasPage() {
   const { project } = useProject();
   const [ideas, setIdeas] = useState<Idea[]>([]);
-  const [meta, setMeta] = useState<GenerateMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewFilter>('new');
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [dislikePickerId, setDislikePickerId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   useEffect(() => {
     let mounted = true;
-    fetch(`/api/ideas?project_id=${project.id}`)
-      .then((r) => r.json())
-      .then((d) => {
+    (async () => {
+      try {
+        const r = await fetch(`/api/ideas?project_id=${project.id}`);
+        const d = await r.json();
         if (mounted && d.ideas) setIdeas(d.ideas as Idea[]);
-      })
-      .catch(() => {
+      } catch {
         if (mounted) setError('Failed to load ideas');
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setLoading(false);
-      });
+      }
+    })();
     return () => {
       mounted = false;
     };
   }, [project.id]);
 
+  async function refetchIdeas() {
+    try {
+      const r = await fetch(`/api/ideas?project_id=${project.id}`);
+      const d = await r.json();
+      if (d.ideas) setIdeas(d.ideas as Idea[]);
+    } catch {
+      setError('Failed to reload ideas');
+    }
+  }
+
   async function handleGenerate() {
     setGenerating(true);
     setError('');
-    setMeta(null);
     try {
       const res = await fetch('/api/ideas', {
         method: 'POST',
@@ -69,8 +79,9 @@ export default function IdeasPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to generate ideas');
-      setIdeas(data.ideas as Idea[]);
-      if (data.meta) setMeta(data.meta as GenerateMeta);
+      // POST returns only new batch; re-fetch full list
+      await refetchIdeas();
+      setView('new');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -78,73 +89,100 @@ export default function IdeasPage() {
     }
   }
 
-  async function handleRegenerate() {
-    setRegenerating(true);
-    setError('');
-    setMeta(null);
-    try {
-      const res = await fetch('/api/ideas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: project.id,
-          previousIdeas: ideas.map((i) => i.title),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate ideas');
-      setIdeas(data.ideas as Idea[]);
-      if (data.meta) setMeta(data.meta as GenerateMeta);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setRegenerating(false);
-    }
-  }
-
-  async function handleRegenerateOne(idea: Idea) {
-    setRegeneratingId(idea.id);
-    setError('');
-    try {
-      const res = await fetch(`/api/ideas/${idea.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: project.id,
-          otherIdeas: ideas.filter((i) => i.id !== idea.id).map((i) => i.title),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate idea');
-      setIdeas((prev) =>
-        prev.map((existing) => (existing.id === idea.id ? (data.idea as Idea) : existing))
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setRegeneratingId(null);
-    }
-  }
-
-  async function handleToggleApprove(idea: Idea) {
-    const newStatus = idea.status === 'approved' ? 'draft' : 'approved';
-    setTogglingId(idea.id);
+  async function handleApprove(idea: Idea) {
+    setPendingId(idea.id);
     try {
       const res = await fetch(`/api/ideas/${idea.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: 'approved' }),
       });
-      if (!res.ok) throw new Error('Failed to update status');
+      if (!res.ok) throw new Error('Failed to approve');
       setIdeas((prev) =>
-        prev.map((existing) =>
-          existing.id === idea.id ? { ...existing, status: newStatus } : existing
+        prev.map((i) => (i.id === idea.id ? { ...i, status: 'approved' } : i))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleDislike(idea: Idea, reason: string | null) {
+    setPendingId(idea.id);
+    setDislikePickerId(null);
+    try {
+      const res = await fetch(`/api/ideas/${idea.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected', feedback_reason: reason }),
+      });
+      if (!res.ok) throw new Error('Failed to dislike');
+      setIdeas((prev) =>
+        prev.map((i) =>
+          i.id === idea.id ? { ...i, status: 'rejected', feedbackReason: reason } : i
         )
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
-      setTogglingId(null);
+      setPendingId(null);
+    }
+  }
+
+  async function handleMoveToNew(idea: Idea, clearReason = false) {
+    setPendingId(idea.id);
+    try {
+      const body: Record<string, unknown> = { status: 'new' };
+      if (clearReason) body.feedback_reason = null;
+      const res = await fetch(`/api/ideas/${idea.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      setIdeas((prev) =>
+        prev.map((i) =>
+          i.id === idea.id
+            ? { ...i, status: 'new', feedbackReason: clearReason ? null : i.feedbackReason }
+            : i
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError('');
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const filenameMatch = disposition.match(/filename="([^"]+)"/);
+      a.href = url;
+      a.download = filenameMatch?.[1] ?? 'trendforge-export.docx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -156,47 +194,46 @@ export default function IdeasPage() {
     );
   }
 
-  if (generating || regenerating) {
+  if (generating) {
     return (
       <GenerationProgress
         active
         steps={IDEAS_GENERATION_STEPS}
-        title={regenerating ? 'Regenerating content ideas' : 'Generating content ideas'}
+        title="Generating content ideas"
         estimate="usually 45–90 seconds"
       />
     );
   }
 
+  const newCount = ideas.filter((i) => i.status === 'new').length;
   const approvedCount = ideas.filter((i) => i.status === 'approved').length;
+  const rejectedCount = ideas.filter((i) => i.status === 'rejected').length;
 
-  const qualityLabel =
-    meta && meta.regeneratedCount > 0
-      ? `${meta.regeneratedCount} idea${meta.regeneratedCount !== 1 ? 's' : ''} refined`
-      : meta
-        ? 'Quality checked'
-        : null;
+  const visibleIdeas = ideas.filter((i) => i.status === view);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <div className="flex items-center gap-3 mb-1">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
           <h3 className="text-lg font-bold text-foreground">Content ideas</h3>
-          {qualityLabel && (
-            <Badge variant="secondary" className="text-xs text-emerald-500">
-              ✓ {qualityLabel}
-            </Badge>
-          )}
-          {approvedCount > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {approvedCount} approved
-            </Badge>
-          )}
+          <p className="text-sm text-muted-foreground">
+            {ideas.length > 0
+              ? `${ideas.length} idea${ideas.length !== 1 ? 's' : ''} total`
+              : 'No ideas yet.'}
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {ideas.length > 0
-            ? `${ideas.length} idea${ideas.length !== 1 ? 's' : ''} — approve the ones you want to export, or export all.`
-            : 'No ideas yet.'}
-        </p>
+        {approvedCount > 0 && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? 'Exporting…' : 'Export approved'}
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -205,7 +242,14 @@ export default function IdeasPage() {
         </div>
       )}
 
-      {ideas.length === 0 && !loading && (
+      {exportError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3">
+          <p className="text-sm text-destructive">{exportError}</p>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {ideas.length === 0 && (
         <div className="flex flex-col items-center gap-4 py-16">
           <p className="text-muted-foreground text-sm">No ideas yet — generate some to get started.</p>
           <Button onClick={handleGenerate} disabled={generating}>
@@ -215,165 +259,283 @@ export default function IdeasPage() {
       )}
 
       {ideas.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-          {ideas.map((idea) => {
-            const isRegeneratingThis = regeneratingId === idea.id;
-            const isTogglingThis = togglingId === idea.id;
-            const isApproved = idea.status === 'approved';
+        <>
+          {/* View filter */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={view === 'new' ? 'default' : 'outline'}
+              onClick={() => setView('new')}
+            >
+              New {newCount > 0 && <span className="ml-1.5 text-xs opacity-70">({newCount})</span>}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={view === 'approved' ? 'default' : 'outline'}
+              onClick={() => setView('approved')}
+            >
+              Approved {approvedCount > 0 && <span className="ml-1.5 text-xs opacity-70">({approvedCount})</span>}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={view === 'rejected' ? 'default' : 'outline'}
+              onClick={() => setView('rejected')}
+            >
+              Disliked {rejectedCount > 0 && <span className="ml-1.5 text-xs opacity-70">({rejectedCount})</span>}
+            </Button>
+          </div>
 
-            return (
-              <Card
-                key={idea.id}
-                className={`border transition-colors ${
-                  isApproved ? 'border-emerald-500/40' : 'border-border'
-                }`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <CardTitle className="text-base font-semibold leading-snug">
-                      {idea.title}
-                    </CardTitle>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className="text-xs">
-                        {idea.trendRef}
-                      </Badge>
-                      {isApproved && (
-                        <Badge variant="secondary" className="text-xs text-emerald-500">
-                          ✓ Approved
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
+          {/* Cards */}
+          {visibleIdeas.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                {view === 'new'
+                  ? 'No new ideas — generate more below.'
+                  : view === 'approved'
+                    ? 'No approved ideas yet — approve some from the New tab.'
+                    : 'No disliked ideas.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+              {visibleIdeas.map((idea) => {
+                const isPending = pendingId === idea.id;
+                const showDislikePicker = dislikePickerId === idea.id;
 
-                {isRegeneratingThis ? (
-                  <CardContent>
-                    <GenerationProgress
-                      active
-                      steps={IDEAS_REGEN_ONE_STEPS}
-                      title="Regenerating idea"
-                      estimate="usually 15–30 seconds"
-                      compact
-                    />
-                  </CardContent>
-                ) : (
-                  <CardContent className="space-y-5 text-sm">
-                    {/* Hook */}
-                    <div className="rounded-md bg-muted px-4 py-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                        Hook — first 3 seconds
-                      </p>
-                      <p className="text-foreground font-medium leading-snug">{idea.hook}</p>
-                    </div>
-
-                    {/* Script */}
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                        Script / voiceover
-                      </p>
-                      <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed">
-                        {idea.script}
-                      </p>
-                    </div>
-
-                    {/* Shot list */}
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                        Shot list
-                      </p>
-                      <ol className="space-y-1">
-                        {idea.shotList.map((shot, j) => (
-                          <li key={j} className="flex gap-2 text-foreground/80">
-                            <span className="shrink-0 text-muted-foreground font-mono text-xs mt-0.5">
-                              {String(j + 1).padStart(2, '0')}
-                            </span>
-                            <span>{shot}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-
-                    {/* Audio */}
-                    {idea.audio && (
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                          Audio / sound
-                        </p>
-                        <p className="text-muted-foreground">{idea.audio}</p>
+                return (
+                  <Card
+                    key={idea.id}
+                    className={`border transition-colors ${
+                      idea.status === 'approved'
+                        ? 'border-emerald-500/40'
+                        : idea.status === 'rejected'
+                          ? 'border-destructive/30'
+                          : 'border-border'
+                    }`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <CardTitle className="text-base font-semibold leading-snug">
+                          {idea.title}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary" className="text-xs">
+                            {idea.trendRef}
+                          </Badge>
+                          {idea.status === 'approved' && (
+                            <Badge variant="secondary" className="text-xs text-emerald-500">
+                              Approved
+                            </Badge>
+                          )}
+                          {idea.status === 'rejected' && (
+                            <Badge variant="secondary" className="text-xs text-destructive">
+                              Disliked
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </CardHeader>
 
-                    {/* Caption */}
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                        Caption
-                      </p>
-                      <p className="text-foreground/80">{idea.caption}</p>
-                      {idea.hashtags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {idea.hashtags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full"
-                            >
-                              {tag.startsWith('#') ? tag : `#${tag}`}
-                            </span>
+                    <CardContent className="space-y-5 text-sm">
+                      {/* Hook */}
+                      <div className="rounded-md bg-muted px-4 py-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                          Hook — first 3 seconds
+                        </p>
+                        <p className="text-foreground font-medium leading-snug">{idea.hook}</p>
+                      </div>
+
+                      {/* Script */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                          Script / voiceover
+                        </p>
+                        <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                          {idea.script}
+                        </p>
+                      </div>
+
+                      {/* Shot list */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                          Shot list
+                        </p>
+                        <ol className="space-y-1">
+                          {idea.shotList.map((shot, j) => (
+                            <li key={j} className="flex gap-2 text-foreground/80">
+                              <span className="shrink-0 text-muted-foreground font-mono text-xs mt-0.5">
+                                {String(j + 1).padStart(2, '0')}
+                              </span>
+                              <span>{shot}</span>
+                            </li>
                           ))}
+                        </ol>
+                      </div>
+
+                      {/* Audio */}
+                      {idea.audio && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+                            Audio / sound
+                          </p>
+                          <p className="text-muted-foreground">{idea.audio}</p>
                         </div>
                       )}
-                    </div>
 
-                    {/* Why it works */}
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        Why this works
-                      </p>
-                      <p className="text-muted-foreground italic">{idea.why}</p>
-                    </div>
+                      {/* Caption */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                          Caption
+                        </p>
+                        <p className="text-foreground/80">{idea.caption}</p>
+                        {idea.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {idea.hashtags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full"
+                              >
+                                {tag.startsWith('#') ? tag : `#${tag}`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Per-idea actions */}
-                    <div className="flex gap-2 pt-1 border-t border-border">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={isApproved ? 'default' : 'outline'}
-                        onClick={() => handleToggleApprove(idea)}
-                        disabled={isTogglingThis || regeneratingId !== null}
-                        className={isApproved ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-0' : ''}
-                      >
-                        {isTogglingThis ? '…' : isApproved ? '✓ Approved' : 'Approve'}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRegenerateOne(idea)}
-                        disabled={isRegeneratingThis || regeneratingId !== null}
-                        className="text-muted-foreground"
-                      >
-                        Regenerate
-                      </Button>
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                      {/* Why it works */}
+                      <div className="border-t border-border pt-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+                          Why this works
+                        </p>
+                        <p className="text-muted-foreground italic">{idea.why}</p>
+                      </div>
 
-      {ideas.length > 0 && (
-        <>
+                      {/* Disliked: show feedback reason */}
+                      {idea.status === 'rejected' && idea.feedbackReason && (
+                        <div className="pt-1">
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                            {idea.feedbackReason}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Per-card actions */}
+                      <div className="border-t border-border pt-3 space-y-3">
+                        {idea.status === 'new' && (
+                          <>
+                            {showDislikePicker ? (
+                              <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground">Why not this one?</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {DISLIKE_REASONS.map((reason) => (
+                                    <Button
+                                      key={reason}
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={isPending}
+                                      onClick={() => handleDislike(idea, reason)}
+                                      className="text-xs h-7"
+                                    >
+                                      {reason}
+                                    </Button>
+                                  ))}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={isPending}
+                                    onClick={() => handleDislike(idea, null)}
+                                    className="text-xs h-7 text-muted-foreground"
+                                  >
+                                    Skip
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={isPending}
+                                    onClick={() => setDislikePickerId(null)}
+                                    className="text-xs h-7 text-muted-foreground"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => handleApprove(idea)}
+                                  disabled={isPending}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                                >
+                                  {isPending ? '…' : 'Approve'}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setDislikePickerId(idea.id)}
+                                  disabled={isPending}
+                                >
+                                  Dislike
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {idea.status === 'approved' && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMoveToNew(idea)}
+                            disabled={isPending}
+                            className="text-muted-foreground"
+                          >
+                            {isPending ? '…' : 'Move to New'}
+                          </Button>
+                        )}
+
+                        {idea.status === 'rejected' && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMoveToNew(idea, true)}
+                            disabled={isPending}
+                            className="text-muted-foreground"
+                          >
+                            {isPending ? '…' : 'Restore'}
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
           <Separator />
-          <div className="flex flex-col gap-3">
+
+          {/* Generate more */}
+          <div>
             <Button
               type="button"
               variant="outline"
-              onClick={handleRegenerate}
-              disabled={regenerating || regeneratingId !== null}
+              onClick={handleGenerate}
+              disabled={generating}
               className="w-full"
             >
-              {ideas.length > 0 ? 'Generate more' : 'Regenerate all ideas'}
+              Generate more ideas
             </Button>
           </div>
         </>
