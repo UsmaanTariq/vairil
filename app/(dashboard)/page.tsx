@@ -376,8 +376,7 @@ export default function DashboardPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid vertical={false} />
-                    <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8}
-                      tickFormatter={(v) => String(v).slice(5)} />
+                    <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8} />
                     <ChartTooltip
                       content={<ChartTooltipContent indicator="dashed" />}
                       cursor={{ stroke: 'var(--color-views)', strokeDasharray: '3 3', strokeLinecap: 'round' }}
@@ -429,8 +428,7 @@ export default function DashboardPage() {
                 <ChartContainer className="aspect-auto h-56 w-full" config={viewsConfig}>
                   <BarChart accessibilityLayer data={combinedPerDay} margin={{ left: 12, right: 12 }}>
                     <CartesianGrid vertical={false} />
-                    <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8}
-                      tickFormatter={(v) => String(v).slice(5)} />
+                    <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8} />
                     <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--muted)', opacity: 0.4 }} />
                     <Bar dataKey="views" name="Views gained" fill="var(--color-views)" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
