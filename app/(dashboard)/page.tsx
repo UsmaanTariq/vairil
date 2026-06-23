@@ -9,6 +9,7 @@ import {
   BarChart,
   CartesianGrid,
   XAxis,
+  YAxis,
 } from 'recharts';
 import {
   Pencil,
@@ -26,6 +27,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -89,6 +91,27 @@ function fmt(n: number | null) {
   return n.toLocaleString();
 }
 
+// Y-axis domain padded around the data's actual min/max so small variation in
+// large values (e.g. cumulative views) is visible instead of looking flat.
+function paddedDomain(values: number[], padRatio = 0.2): [number, number] | ['auto', 'auto'] {
+  if (!values.length) return ['auto', 'auto'];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) {
+    const pad = Math.max(1, Math.abs(min) * 0.05);
+    return [Math.max(0, min - pad), max + pad];
+  }
+  const pad = (max - min) * padRatio;
+  return [Math.max(0, Math.floor(min - pad)), Math.ceil(max + pad)];
+}
+
+// Compact axis tick: 10.4M / 64.8K / 532
+function axisFmt(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return `${n}`;
+}
+
 const STAGE_LABELS: Record<string, string> = {
   intake:    'Brief',
   interview: 'Questions',
@@ -121,34 +144,39 @@ function StatCard({
   label,
   value,
   deltaPct,
+  note,
   icon: Icon,
   loading,
 }: {
   label: string;
   value: string | null;
   deltaPct: number | null;
+  note?: string;
   icon: React.ElementType;
   loading: boolean;
 }) {
   return (
     <Card className="dark:bg-transparent">
-      <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <div className="flex flex-col gap-1.5">
-          <CardDescription className="flex items-center gap-2">
-            <Icon className="size-4" />
-            {label}
-          </CardDescription>
-          <CardTitle className="font-mono text-3xl tabular-nums">
-            {loading ? '—' : (value ?? '—')}
-          </CardTitle>
-        </div>
-        {!loading && deltaPct !== null && (
-          <Delta value={deltaPct} variant="badge">
-            <DeltaIcon variant="trend" />
+      <CardHeader>
+        <CardDescription className="flex items-center gap-2">
+          <Icon className="size-4" />
+          {label}
+        </CardDescription>
+        <CardTitle className="font-mono text-3xl tabular-nums">
+          {loading ? '—' : (value ?? '—')}
+        </CardTitle>
+      </CardHeader>
+      {!loading && deltaPct !== null ? (
+        <CardFooter className="gap-1.5 text-xs">
+          <Delta value={deltaPct} variant="default">
+            <DeltaIcon variant="arrow" />
             <DeltaValue suffix="%" />
           </Delta>
-        )}
-      </CardHeader>
+          <span className="text-muted-foreground">vs previous day</span>
+        </CardFooter>
+      ) : !loading && note ? (
+        <CardFooter className="text-xs text-muted-foreground">{note}</CardFooter>
+      ) : null}
     </Card>
   );
 }
@@ -336,6 +364,7 @@ export default function DashboardPage() {
             label="Videos posted"
             value={kpis ? String(kpis.videos.total) : null}
             deltaPct={null}
+            note="Across all accounts"
             icon={Video}
             loading={loading}
           />
@@ -343,6 +372,7 @@ export default function DashboardPage() {
             label="Clients"
             value={kpis ? String(kpis.clients.total) : null}
             deltaPct={null}
+            note="Total tracked"
             icon={Users}
             loading={loading}
           />
@@ -377,6 +407,9 @@ export default function DashboardPage() {
                     </defs>
                     <CartesianGrid vertical={false} />
                     <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8} />
+                    <YAxis axisLine={false} tickLine={false} width={44} tickMargin={4}
+                      domain={paddedDomain(combinedTrend.map((d) => d.views))}
+                      tickFormatter={axisFmt} />
                     <ChartTooltip
                       content={<ChartTooltipContent indicator="dashed" />}
                       cursor={{ stroke: 'var(--color-views)', strokeDasharray: '3 3', strokeLinecap: 'round' }}

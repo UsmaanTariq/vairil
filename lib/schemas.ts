@@ -60,7 +60,7 @@ export const IdeaSchema = z.object({
   caption: z.string(),
   hashtags: z.array(z.string()),
   why: z.string(),
-  status: z.enum(['draft', 'approved']).default('draft'),
+  status: z.enum(['new', 'approved', 'rejected']).default('new'),
 });
 
 export type Idea = z.infer<typeof IdeaSchema>;

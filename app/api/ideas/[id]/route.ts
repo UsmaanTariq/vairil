@@ -25,7 +25,7 @@ const returnIdeasTool: Anthropic.Tool = {
             caption: { type: 'string' },
             hashtags: { type: 'array', items: { type: 'string' } },
             why: { type: 'string' },
-            status: { type: 'string', enum: ['draft', 'approved'] },
+            status: { type: 'string', enum: ['new', 'approved', 'rejected'] },
           },
           required: ['title', 'trendRef', 'hook', 'script', 'shotList', 'caption', 'hashtags', 'why'],
         },
@@ -35,26 +35,31 @@ const returnIdeasTool: Anthropic.Tool = {
   },
 };
 
-// Toggle idea status between draft and approved
+// Update idea status and/or feedback_reason
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const body = await req.json();
-  const { status } = body as { status: 'draft' | 'approved' };
-
-  if (!['draft', 'approved'].includes(status)) {
-    return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+  const { status, feedback_reason } = body as {
+    status?: "new" | "approved" | "rejected";
+    feedback_reason?: string | null;
+  };
+  const update: Record<string, unknown> = {};
+  if (status !== undefined) {
+    if (!["new", "approved", "rejected"].includes(status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+    update.status = status;
   }
-
-  const { error } = await supabase.from('ideas').update({ status }).eq('id', id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (feedback_reason !== undefined) update.feedback_reason = feedback_reason;
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
-
-  return NextResponse.json({ ok: true, status });
+  const { error } = await supabase.from("ideas").update(update).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, ...update });
 }
 
 // Regenerate a single idea using the same profile + trends context
@@ -170,7 +175,7 @@ export async function POST(
         caption: newIdea.caption,
         hashtags: newIdea.hashtags,
         why: newIdea.why,
-        status: 'draft',
+        status: 'new',
       })
       .eq('id', id);
 
@@ -178,7 +183,7 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ idea: { id, ...newIdea, status: 'draft' } });
+    return NextResponse.json({ idea: { id, ...newIdea, status: 'new' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to regenerate idea';
     return NextResponse.json({ error: message }, { status: 500 });

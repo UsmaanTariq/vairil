@@ -31,7 +31,7 @@ const returnIdeasTool: Anthropic.Tool = {
             caption: { type: 'string' },
             hashtags: { type: 'array', items: { type: 'string' } },
             why: { type: 'string' },
-            status: { type: 'string', enum: ['draft', 'approved'] },
+            status: { type: 'string', enum: ['new', 'approved', 'rejected'] },
           },
           required: ['title', 'trendRef', 'hook', 'script', 'shotList', 'caption', 'hashtags', 'why'],
         },
@@ -74,14 +74,15 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('ideas')
-    .select('id, title, trend_ref, hook, script, shot_list, audio, caption, hashtags, why, status')
-    .eq('project_id', project_id);
+    .select('id, title, trend_ref, hook, script, shot_list, audio, caption, hashtags, why, status, feedback_reason, created_at')
+    .eq('project_id', project_id)
+    .order('created_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const ideas: Idea[] = (data ?? []).map((row) => ({
+  const ideas = (data ?? []).map((row) => ({
     id: row.id as string,
     title: row.title,
     trendRef: row.trend_ref,
@@ -92,7 +93,8 @@ export async function GET(req: NextRequest) {
     caption: row.caption,
     hashtags: (row.hashtags as string[]) ?? [],
     why: row.why,
-    status: (row.status as 'draft' | 'approved') ?? 'draft',
+    status: (row.status as 'new' | 'approved' | 'rejected') ?? 'new',
+    feedbackReason: row.feedback_reason ?? null,
   }));
 
   return NextResponse.json({ ideas });
@@ -101,7 +103,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { project_id, previousIdeas } = body as { project_id: string; previousIdeas?: string[] };
+    const { project_id } = body as { project_id: string };
 
     if (!project_id) {
       return NextResponse.json({ error: 'project_id required' }, { status: 400 });
@@ -120,11 +122,21 @@ export async function POST(req: NextRequest) {
 
     const profile = synthRow.profile as Record<string, string>;
 
-    // Load trends
+    // Load trends (non-dismissed only)
     const { data: trendRows } = await supabase
       .from('trends')
       .select('name, description, platform, format, relevance, confidence')
+      .eq('project_id', project_id)
+      .eq('dismissed', false);
+
+    // Load existing ideas for avoid-repeats + negative steering
+    const { data: existingIdeaRows } = await supabase
+      .from('ideas')
+      .select('title, hook, status, feedback_reason')
       .eq('project_id', project_id);
+
+    const existingTitles = (existingIdeaRows ?? []).map((r) => r.title as string);
+    const disliked = (existingIdeaRows ?? []).filter((r) => r.status === 'rejected');
 
     const trendsText =
       (trendRows ?? [])
@@ -147,11 +159,20 @@ export async function POST(req: NextRequest) {
     ].join('\n');
 
     const previousIdeasBlock =
-      previousIdeas && previousIdeas.length > 0
+      existingTitles.length > 0
         ? [
-            ``,
-            `PREVIOUSLY GENERATED IDEAS FOR THIS PROJECT (avoid reusing these concepts, angles, or hooks):`,
-            ...previousIdeas.map((t) => `- ${t}`),
+            '',
+            'ALREADY-GENERATED IDEAS (do not repeat these concepts, angles, or hooks):',
+            ...existingTitles.map((t) => `- ${t}`),
+          ].join('\n')
+        : '';
+
+    const dislikedBlock =
+      disliked.length > 0
+        ? [
+            '',
+            'THE CLIENT DISLIKED THESE IDEAS — generate clearly different concepts. Avoid their style, topics, and angles:',
+            ...disliked.map((r) => `- "${r.title as string}"${r.feedback_reason ? ` (reason: ${r.feedback_reason as string})` : ''}`),
           ].join('\n')
         : '';
 
@@ -161,6 +182,7 @@ export async function POST(req: NextRequest) {
       `CURRENT TRENDS TO ANCHOR IDEAS TO:`,
       trendsText,
       previousIdeasBlock,
+      dislikedBlock,
     ].join('\n');
 
     // --- Initial generation ---
@@ -265,9 +287,7 @@ export async function POST(req: NextRequest) {
       totalRegenerated += rejected.length;
     }
 
-    // Upsert: delete old, insert final batch
-    await supabase.from('ideas').delete().eq('project_id', project_id);
-
+    // Append new ideas as status 'new' (do NOT delete existing).
     if (currentIdeas.length > 0) {
       await supabase.from('ideas').insert(
         currentIdeas.map((idea) => ({
@@ -281,13 +301,10 @@ export async function POST(req: NextRequest) {
           caption: idea.caption,
           hashtags: idea.hashtags,
           why: idea.why,
-          status: idea.status ?? 'draft',
+          status: 'new',
         }))
       );
     }
-
-    // Advance project status to ideas
-    await supabase.from('projects').update({ status: 'ideas' }).eq('id', project_id);
 
     return NextResponse.json({
       ideas: currentIdeas,

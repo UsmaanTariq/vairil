@@ -8,7 +8,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-import { AppShell } from '@/components/app-shell';
 import {
   Card,
   CardContent,
@@ -71,6 +70,20 @@ function fmt(n: number | null) {
 function fmtDate(iso: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// Y-axis domain padded around the data's actual min/max so small variation in
+// large values (e.g. follower counts, cumulative views) stays visible.
+function paddedDomain(values: number[], padRatio = 0.2): [number, number] | ['auto', 'auto'] {
+  if (!values.length) return ['auto', 'auto'];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) {
+    const pad = Math.max(1, Math.abs(min) * 0.05);
+    return [Math.max(0, min - pad), max + pad];
+  }
+  const pad = (max - min) * padRatio;
+  return [Math.max(0, Math.floor(min - pad)), Math.ceil(max + pad)];
 }
 
 // Theme-aware recharts styling — adapts to the active (dark) theme via CSS variables.
@@ -294,13 +307,19 @@ export default function ProjectAnalyticsPage() {
   const topTtVideo = [...ttVideos].sort((a, b) => b.views - a.views)[0] ?? null;
   const topIgPost  = [...igPosts].sort((a, b) => b.likes - a.likes)[0] ?? null;
 
+  // Padded Y-axis domains so the time-series area charts show real variation.
+  const ttFollowerDomain = paddedDomain(ttTrendData.map((d) => d.followers));
+  const ttViewsDomain    = paddedDomain(ttViewsCumulative.map((d) => d.views));
+  const igFollowerDomain = paddedDomain(igTrendData.map((d) => d.followers));
+  const igViewsDomain    = paddedDomain(igViewsCumulative.map((d) => d.views));
+
   // "Linked" means a real account record exists — a leftover handle string with no
   // account row (e.g. the row was deleted in the DB) must still expose the Add form.
   const hasTikTok    = Boolean(data?.tiktok);
   const hasInstagram = Boolean(data?.instagram);
 
   return (
-    <AppShell>
+    <>
       {loading ? (
         <Card className="dark:bg-transparent"><CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
       ) : error ? (
@@ -385,7 +404,7 @@ export default function ProjectAnalyticsPage() {
                           </defs>
                           <CartesianGrid {...GRID_H} />
                           <XAxis dataKey="date" tick={TICK} {...AXIS} />
-                          <YAxis tickFormatter={fmt} tick={TICK} domain={['auto', 'auto']} width={44} {...AXIS} />
+                          <YAxis tickFormatter={fmt} tick={TICK} domain={ttFollowerDomain} width={44} {...AXIS} />
                           <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
                           <Area type="monotone" dataKey="followers" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#ttFollowers)" dot={false} activeDot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--background)', strokeWidth: 2 }} />
                         </AreaChart>
@@ -406,7 +425,7 @@ export default function ProjectAnalyticsPage() {
                             </defs>
                             <CartesianGrid {...GRID_H} />
                             <XAxis dataKey="date" tick={TICK} {...AXIS} />
-                            <YAxis tickFormatter={fmt} tick={TICK} domain={['auto', 'auto']} width={44} {...AXIS} />
+                            <YAxis tickFormatter={fmt} tick={TICK} domain={ttViewsDomain} width={44} {...AXIS} />
                             <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Total views']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
                             <Area type="monotone" dataKey="views" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#ttViewsCum)" dot={false} activeDot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--background)', strokeWidth: 2 }} />
                           </AreaChart>
@@ -559,7 +578,7 @@ export default function ProjectAnalyticsPage() {
                           </defs>
                           <CartesianGrid {...GRID_H} />
                           <XAxis dataKey="date" tick={TICK} {...AXIS} />
-                          <YAxis tickFormatter={fmt} tick={TICK} domain={['auto', 'auto']} width={44} {...AXIS} />
+                          <YAxis tickFormatter={fmt} tick={TICK} domain={igFollowerDomain} width={44} {...AXIS} />
                           <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Followers']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
                           <Area type="monotone" dataKey="followers" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#igFollowers)" dot={false} activeDot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--background)', strokeWidth: 2 }} />
                         </AreaChart>
@@ -580,7 +599,7 @@ export default function ProjectAnalyticsPage() {
                             </defs>
                             <CartesianGrid {...GRID_H} />
                             <XAxis dataKey="date" tick={TICK} {...AXIS} />
-                            <YAxis tickFormatter={fmt} tick={TICK} domain={['auto', 'auto']} width={44} {...AXIS} />
+                            <YAxis tickFormatter={fmt} tick={TICK} domain={igViewsDomain} width={44} {...AXIS} />
                             <Tooltip formatter={(v) => [fmt(typeof v === 'number' ? v : null), 'Total views']} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
                             <Area type="monotone" dataKey="views" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#igViewsCum)" dot={false} activeDot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--background)', strokeWidth: 2 }} />
                           </AreaChart>
@@ -845,6 +864,6 @@ export default function ProjectAnalyticsPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
