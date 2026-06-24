@@ -44,4 +44,60 @@ hook: "Ever wondered what happens behind the scenes at a bakery?"
 why this fails: Generic enough to be posted by any of 50,000 bakeries worldwide. No specific
 product, no real customer, no constraint, no reason to care.
 
+---
+
+HOOK PATTERN LIBRARY
+
+The hook is the first 3 seconds and decides whether the video gets watched. Below are
+proven hook patterns. Use them as STRUCTURE, never as fill-in-the-blank scripts:
+
+- Fill every [bracket] with the client's REAL specifics — actual offer, audience,
+  location, numbers, personal story. A bracket left generic (e.g. "transform your space")
+  is a failed hook.
+- ADAPT THE VOICE to the brand tone in the profile. These patterns are written in a
+  casual, hype creator register; rewrite the wording to fit the client — a furniture
+  brand, a clinic, or a law firm should sound nothing like a hype fitness creator. Keep
+  the structure, change the voice.
+- VARY THE PATTERN across the {N} ideas — do not build them all on the same pattern, and
+  don't reuse a pattern an earlier idea already used.
+- The finished hook must still be impossible to copy-paste to another business.
+
+PROMISE / "HERE'S HOW" (outcome-driven):
+- If you're tired of [opposite of outcome], here's the ultimate guide to [outcome].
+- If you're tired of never [outcome], you NEED to watch this.
+- So you wanna [outcome]? Simplest way to do it, from someone whose [personal outcome].
+- Here's exactly how you're gonna [verb] your first [outcome].
+- Here's exactly how you'll [outcome] in the next 60 seconds.
+- In 60 seconds, I'll show you how to [outcome].
+- Here's how to ACTUALLY [outcome]. [Solution].
+- It's officially the easiest time to [outcome] — here's how, this week.
+
+PERSONAL AUTHORITY / PROOF:
+- I'm gonna give you my BEST [solution] as someone who [personal outcome].
+- I get this question so often: how did you [personal outcome]? I just [solution].
+- Here's exactly how I [personal outcome]. I [solution].
+- I recently [personal outcome] — here's the exact [solution] I used to get these results.
+- I just [personal outcome]. Here's why I haven't stopped.
+- It took me [4 years] to learn what I'll teach you in 90 seconds.
+
+LISTICLE / NUMBERED (great for "X tips/steps/rules"):
+- Every day I [personal outcome] — here are my [8] tips to [outcome].
+- After years of [personal outcome], these are the [6] rules of [outcome] I know to be true.
+- [3] steps to becoming [outcome] / top 1% at [skill].
+- [5] principles for [outcome].
+- [3] things I wish I knew [before/in my early 20s].
+- [4] ways to [outcome]. / [5] things you need to know if you want to [outcome].
+
+CONTRARIAN / TOUGH-LOVE / MYTH-BUST:
+- So you failed to [outcome]? Tough love: it's because you didn't [solution].
+- Here's how to NOT [opposite of outcome]. Stop [opposite of solution].
+- I hate to break it to you, but [hard truth about the issue].
+- [Topic] isn't hard — you're just overcomplicating it.
+- Some [forbidden/unconventional] hacks to [outcome] you probably shouldn't use.
+- "[Provocative scenario] — and I'm the [negative identity]? Wrong." Flip the expected
+  judgement, then deliver the real point (pattern-matched outrage → payoff).
+
+RELATABILITY / COMMUNITY:
+- This one's for everyone who struggles with [specific pain point].
+
 ---`;
