@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { RefreshCw, Eye, Heart, MessageCircle, Share2, TrendingUp, UserRound, type LucideIcon } from 'lucide-react';
+import { RefreshCw, Eye, Heart, MessageCircle, Share2, TrendingUp, UserRound, FileText, ChevronDown, type LucideIcon } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -46,6 +46,17 @@ interface VideoStat {
   shares:          number;
   engagement_rate: number;
   thumbnail_url:   string | null;
+}
+
+interface TranscriptItem {
+  video_id:   string;
+  title:      string;
+  url:        string;
+  views:      number;
+  likes:      number;
+  transcript: string | null;
+  cached?:    boolean;
+  error?:     string;
 }
 
 interface SnapshotBase { id: string; fetched_at: string; followers: number; views?: number }
@@ -157,6 +168,10 @@ export default function ProjectAnalyticsPage() {
   const [igLinking, setIgLinking]       = useState(false);
   const [ttLinkErr, setTtLinkErr]       = useState('');
   const [igLinkErr, setIgLinkErr]       = useState('');
+  const [transcripts, setTranscripts]   = useState<TranscriptItem[] | null>(null);
+  const [transcriptsLoading, setTranscriptsLoading] = useState(false);
+  const [transcriptsErr, setTranscriptsErr]         = useState('');
+  const [openTranscript, setOpenTranscript]         = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/projects/${id}/analytics`)
@@ -231,6 +246,19 @@ export default function ProjectAnalyticsPage() {
       if (!refreshed.error) { setData(refreshed); setIgHandle(''); }
     } catch { setIgLinkErr('Network error'); }
     finally { setIgLinking(false); }
+  }
+
+  async function pullTranscripts(refresh = false) {
+    const accountId = data?.tiktok?.account_id;
+    if (!accountId) return;
+    setTranscriptsLoading(true); setTranscriptsErr('');
+    try {
+      const res = await fetch(`/api/tiktok/accounts/${accountId}/transcripts${refresh ? '?refresh=1' : ''}`);
+      const d = await res.json();
+      if (!res.ok) { setTranscriptsErr(d.error ?? 'Failed to pull transcripts'); return; }
+      setTranscripts(d.transcripts ?? []);
+    } catch { setTranscriptsErr('Network error'); }
+    finally { setTranscriptsLoading(false); }
   }
 
   function toggleTt(key: TtSortKey) {
@@ -529,6 +557,70 @@ export default function ProjectAnalyticsPage() {
                           </div>
                         )}
                       </CardContent>
+                    </Card>
+                  )}
+
+                  {ttVideos.length > 0 && (
+                    <Card className="dark:bg-transparent">
+                      <CardHeader className="flex flex-row items-center justify-between gap-2">
+                        <div>
+                          <CardTitle className="text-sm">Top {Math.min(5, ttVideos.length)} — video transcripts</CardTitle>
+                          <CardDescription>Spoken-word transcripts of the best-performing videos, via Supadata.</CardDescription>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {transcriptsErr && <p className="text-xs text-destructive">{transcriptsErr}</p>}
+                          {transcripts && (
+                            <Button variant="ghost" size="sm" onClick={() => pullTranscripts(true)} disabled={transcriptsLoading}>
+                              <RefreshCw className={`size-3.5 ${transcriptsLoading ? 'animate-spin' : ''}`} />
+                              Re-pull
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => pullTranscripts(false)} disabled={transcriptsLoading}>
+                            <FileText className="size-3.5" />
+                            {transcriptsLoading ? 'Pulling…' : transcripts ? 'Refresh' : 'Pull transcripts'}
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      {transcripts && (
+                        <CardContent className="flex flex-col gap-2">
+                          {transcripts.length === 0 && (
+                            <p className="py-2 text-sm text-muted-foreground">No videos available to transcribe.</p>
+                          )}
+                          {transcripts.map((t, i) => {
+                            const open = openTranscript === t.video_id;
+                            return (
+                              <div key={t.video_id} className="rounded-xl border">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenTranscript(open ? null : t.video_id)}
+                                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                                >
+                                  <span className="font-mono text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+                                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                    {t.title || t.video_id}
+                                  </span>
+                                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmt(t.views)} views</span>
+                                  <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+                                </button>
+                                {open && (
+                                  <div className="border-t px-4 py-3">
+                                    {t.error ? (
+                                      <p className="text-sm text-destructive">Couldn’t transcribe: {t.error}</p>
+                                    ) : t.transcript ? (
+                                      <p className="max-h-64 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{t.transcript}</p>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No transcript returned.</p>
+                                    )}
+                                    <a href={t.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground hover:underline">
+                                      Open on TikTok ↗
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </CardContent>
+                      )}
                     </Card>
                   )}
 
