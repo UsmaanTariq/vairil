@@ -1,11 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { useProject } from '../project-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { GenerationProgress } from '@/components/generation-progress';
 import { IDEAS_GENERATION_STEPS } from '@/lib/generation-steps';
 
@@ -39,6 +50,93 @@ export default function IdeasPage() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+
+  // Inline editing of a generated idea
+  interface EditDraft {
+    title: string;
+    hook: string;
+    script: string;
+    shotListText: string;
+    audio: string;
+    caption: string;
+    hashtagsText: string;
+    why: string;
+  }
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function openEdit(idea: Idea) {
+    setEditingId(idea.id);
+    setDraft({
+      title: idea.title,
+      hook: idea.hook,
+      script: idea.script,
+      shotListText: idea.shotList.join('\n'),
+      audio: idea.audio ?? '',
+      caption: idea.caption,
+      hashtagsText: idea.hashtags.join(', '),
+      why: idea.why,
+    });
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId || !draft) return;
+    setSavingEdit(true);
+    setError('');
+    const shotList = draft.shotListText
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const hashtags = draft.hashtagsText
+      .split(',')
+      .map((t) => t.trim().replace(/^#/, ''))
+      .filter(Boolean);
+    const audio = draft.audio.trim();
+    try {
+      const res = await fetch(`/api/ideas/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draft.title.trim(),
+          hook: draft.hook,
+          script: draft.script,
+          shotList,
+          audio: audio || null,
+          caption: draft.caption,
+          hashtags,
+          why: draft.why,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? 'Failed to save changes');
+      }
+      setIdeas((prev) =>
+        prev.map((i) =>
+          i.id === editingId
+            ? {
+                ...i,
+                title: draft.title.trim(),
+                hook: draft.hook,
+                script: draft.script,
+                shotList,
+                audio: audio || undefined,
+                caption: draft.caption,
+                hashtags,
+                why: draft.why,
+              }
+            : i
+        )
+      );
+      setEditingId(null);
+      setDraft(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -335,6 +433,17 @@ export default function IdeasPage() {
                               Disliked
                             </Badge>
                           )}
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => openEdit(idea)}
+                            disabled={isPending}
+                            aria-label="Edit idea"
+                            className="text-muted-foreground"
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
                         </div>
                       </div>
                     </CardHeader>
@@ -540,6 +649,110 @@ export default function IdeasPage() {
           </div>
         </>
       )}
+
+      {/* Edit idea dialog */}
+      <Dialog
+        open={!!editingId}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditingId(null);
+            setDraft(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit idea</DialogTitle>
+          </DialogHeader>
+          {draft && (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={draft.title}
+                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-hook">Hook (first 3 seconds)</Label>
+                <Textarea
+                  id="edit-hook"
+                  rows={2}
+                  value={draft.hook}
+                  onChange={(e) => setDraft({ ...draft, hook: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-script">Script / voiceover</Label>
+                <Textarea
+                  id="edit-script"
+                  rows={5}
+                  value={draft.script}
+                  onChange={(e) => setDraft({ ...draft, script: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-shotlist">Shot list (one per line)</Label>
+                <Textarea
+                  id="edit-shotlist"
+                  rows={5}
+                  value={draft.shotListText}
+                  onChange={(e) => setDraft({ ...draft, shotListText: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-audio">Audio / sound</Label>
+                <Input
+                  id="edit-audio"
+                  value={draft.audio}
+                  onChange={(e) => setDraft({ ...draft, audio: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-caption">Caption</Label>
+                <Textarea
+                  id="edit-caption"
+                  rows={2}
+                  value={draft.caption}
+                  onChange={(e) => setDraft({ ...draft, caption: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-hashtags">Hashtags (comma-separated)</Label>
+                <Input
+                  id="edit-hashtags"
+                  value={draft.hashtagsText}
+                  onChange={(e) => setDraft({ ...draft, hashtagsText: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-why">Why this works</Label>
+                <Textarea
+                  id="edit-why"
+                  rows={2}
+                  value={draft.why}
+                  onChange={(e) => setDraft({ ...draft, why: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingId(null);
+                setDraft(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={savingEdit || !draft?.title.trim()}>
+              {savingEdit ? 'Saving…' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

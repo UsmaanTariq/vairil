@@ -42,9 +42,20 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const { status, feedback_reason } = body as {
+  const {
+    status, feedback_reason,
+    title, hook, script, shotList, audio, caption, hashtags, why,
+  } = body as {
     status?: "new" | "approved" | "rejected";
     feedback_reason?: string | null;
+    title?: string;
+    hook?: string;
+    script?: string;
+    shotList?: string[];
+    audio?: string | null;
+    caption?: string;
+    hashtags?: string[];
+    why?: string;
   };
   const update: Record<string, unknown> = {};
   if (status !== undefined) {
@@ -54,6 +65,15 @@ export async function PATCH(
     update.status = status;
   }
   if (feedback_reason !== undefined) update.feedback_reason = feedback_reason;
+  // Editable content fields (camelCase API ⇄ snake_case columns)
+  if (title !== undefined) update.title = title;
+  if (hook !== undefined) update.hook = hook;
+  if (script !== undefined) update.script = script;
+  if (shotList !== undefined) update.shot_list = shotList;
+  if (audio !== undefined) update.audio = audio;
+  if (caption !== undefined) update.caption = caption;
+  if (hashtags !== undefined) update.hashtags = hashtags;
+  if (why !== undefined) update.why = why;
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
