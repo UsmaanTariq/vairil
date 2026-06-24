@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { RefreshCw, Eye, Heart, MessageCircle, Share2, TrendingUp, UserRound, FileText, ChevronDown, type LucideIcon } from 'lucide-react';
 import {
@@ -59,6 +59,16 @@ interface TranscriptItem {
   error?:     string;
 }
 
+interface HistoryPoint {
+  fetched_at:      string;
+  views:           number;
+  likes:           number;
+  comments:        number;
+  shares:          number;
+  engagement_rate: number;
+}
+type HistoryMap = Record<string, HistoryPoint[]>;
+
 interface SnapshotBase { id: string; fetched_at: string; followers: number; views?: number }
 interface TikTokSnapshotTrend    extends SnapshotBase { video_count: number }
 interface InstagramSnapshotTrend extends SnapshotBase { post_count:  number }
@@ -66,8 +76,8 @@ interface TikTokSnapshot    extends TikTokSnapshotTrend    { videos?: VideoStat[
 interface InstagramSnapshot extends InstagramSnapshotTrend { posts?:  PostStat[]  }
 
 interface AnalyticsData {
-  tiktok:    { account_id: string; handle: string | null; latest_snapshot: TikTokSnapshot | null;    snapshots: TikTokSnapshotTrend[]    } | null;
-  instagram: { account_id: string; latest_snapshot: InstagramSnapshot | null; snapshots: InstagramSnapshotTrend[] } | null;
+  tiktok:    { account_id: string; handle: string | null; latest_snapshot: TikTokSnapshot | null;    snapshots: TikTokSnapshotTrend[];    history?: HistoryMap } | null;
+  instagram: { account_id: string; latest_snapshot: InstagramSnapshot | null; snapshots: InstagramSnapshotTrend[]; history?: HistoryMap } | null;
   handles:   { tiktok: string | null; instagram: string | null };
 }
 
@@ -140,6 +150,104 @@ function ChartCard({ title, children, className, delay = '' }: {
   );
 }
 
+const chartDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+// Expanded-row charts: one small area chart per metric showing how this single
+// video/post has moved across snapshots. Metrics scale very differently (views ≫
+// comments) so each gets its own Y-axis rather than sharing one chart.
+// Rank a metric value against all the client's other items for that same metric.
+// Returns "No 1" for the leader, otherwise the percentile band it falls into.
+function rankLabel(value: number, peers: number[]): { text: string; top: boolean } | null {
+  if (peers.length < 2) return null;
+  const rank = peers.filter((p) => p > value).length + 1;
+  if (rank === 1) return { text: 'No 1', top: true };
+  const pct = Math.max(1, Math.ceil((rank / peers.length) * 100));
+  return { text: `Top ${pct}%`, top: pct <= 10 };
+}
+
+function VideoHistoryCharts({ history, includeShares, thumbnail, title, url, peers }: {
+  history?: HistoryPoint[]; includeShares: boolean; thumbnail?: string | null;
+  title?: string; url?: string; peers?: Record<string, number[]>;
+}) {
+  const thumb = thumbnail ? (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="group block shrink-0">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={thumbnail} alt={title ?? ''} className="h-40 w-28 rounded-xl object-cover transition-opacity group-hover:opacity-80"
+        onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+    </a>
+  ) : null;
+
+  const wrap = (body: React.ReactNode) => (
+    <div className="flex flex-col gap-4 sm:flex-row">
+      {thumb}
+      <div className="min-w-0 flex-1">{body}</div>
+    </div>
+  );
+
+  if (!history || history.length === 0) {
+    return wrap(<p className="py-2 text-sm text-muted-foreground">No historical data captured for this one yet.</p>);
+  }
+  if (history.length < 2) {
+    return wrap(<p className="py-2 text-sm text-muted-foreground">Only one snapshot so far — a trend appears once there are at least two refreshes to compare.</p>);
+  }
+
+  const data = history.map((h) => ({
+    date: chartDate(h.fetched_at),
+    views: h.views, likes: h.likes, comments: h.comments, shares: h.shares,
+    engagement: Math.round(h.engagement_rate * 10000) / 100,
+  }));
+
+  // Explicit vivid palette — the global --chart-* vars are greyscale in the dark
+  // theme, so these dropdown charts get their own colour per metric to pop.
+  const metrics: { key: string; label: string; color: string; pct?: boolean }[] = [
+    { key: 'views',      label: 'Views',        color: '#3B82F6' }, // blue
+    { key: 'likes',      label: 'Likes',        color: '#EC4899' }, // pink
+    { key: 'comments',   label: 'Comments',     color: '#F59E0B' }, // amber
+    ...(includeShares ? [{ key: 'shares', label: 'Shares', color: '#10B981' }] : []), // emerald
+    { key: 'engagement', label: 'Engagement %', color: '#8B5CF6', pct: true }, // violet
+  ];
+
+  return wrap(
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+      {metrics.map((m) => {
+        const latest = data[data.length - 1][m.key as keyof typeof data[number]] as number;
+        const rank = rankLabel(latest, peers?.[m.key] ?? []);
+        return (
+          <div key={m.key} className="rounded-xl border bg-card/40 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="size-2 rounded-full" style={{ backgroundColor: m.color }} />
+                {m.label}
+                {rank && (
+                  <Badge variant={rank.top ? 'default' : 'secondary'} className="h-4 px-1.5 text-[10px] font-medium">
+                    {rank.text}
+                  </Badge>
+                )}
+              </span>
+              <span className="font-mono text-sm font-semibold tabular-nums">{m.pct ? `${latest}%` : fmt(latest)}</span>
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={`hist-${m.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={m.color} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={m.color} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid {...GRID_H} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} {...AXIS} />
+                <YAxis tickFormatter={(v) => m.pct ? `${v}%` : fmt(typeof v === 'number' ? v : null)} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} domain={paddedDomain(data.map((d) => d[m.key as keyof typeof d] as number))} width={40} {...AXIS} />
+                <Tooltip formatter={(v) => [m.pct ? `${v}%` : fmt(typeof v === 'number' ? v : null), m.label]} contentStyle={TOOLTIP_STYLE} cursor={LINE_CURSOR} />
+                <Area type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={2} fill={`url(#hist-${m.key})`} dot={false} activeDot={{ r: 3, fill: m.color, stroke: 'var(--background)', strokeWidth: 2 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 type TtSortKey = 'views' | 'likes' | 'comments' | 'shares' | 'engagement_rate';
 type IgSortKey = 'views' | 'likes' | 'comments' | 'engagement_rate';
 type Tab = 'tiktok' | 'instagram';
@@ -171,7 +279,12 @@ export default function ProjectAnalyticsPage() {
   const [transcripts, setTranscripts]   = useState<TranscriptItem[] | null>(null);
   const [transcriptsLoading, setTranscriptsLoading] = useState(false);
   const [transcriptsErr, setTranscriptsErr]         = useState('');
-  const [openTranscript, setOpenTranscript]         = useState<string | null>(null);
+  const [openTranscripts, setOpenTranscripts]       = useState<Set<string>>(new Set());
+  const [openTtRows, setOpenTtRows] = useState<Set<string>>(new Set());
+  const [openIgRows, setOpenIgRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (set: (fn: (s: Set<string>) => Set<string>) => void, key: string) =>
+    set((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   useEffect(() => {
     fetch(`/api/projects/${id}/analytics`)
@@ -179,8 +292,20 @@ export default function ProjectAnalyticsPage() {
       .then((d) => {
         if (d.error) { setError(d.error); return; }
         setData(d);
-        // default to whichever tab has data
         if (!d.tiktok && d.instagram) setTab('instagram');
+        // Auto-load cached transcripts so they appear without a button click.
+        const accountId = d.tiktok?.account_id;
+        if (accountId) {
+          fetch(`/api/tiktok/accounts/${accountId}/transcripts`)
+            .then((r) => r.json())
+            .then((t) => {
+              if (t.transcripts) {
+                setTranscripts(t.transcripts);
+                setOpenTranscripts(new Set((t.transcripts as TranscriptItem[]).map((x) => x.video_id)));
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => setError('Failed to load analytics'))
       .finally(() => setLoading(false));
@@ -256,7 +381,9 @@ export default function ProjectAnalyticsPage() {
       const res = await fetch(`/api/tiktok/accounts/${accountId}/transcripts${refresh ? '?refresh=1' : ''}`);
       const d = await res.json();
       if (!res.ok) { setTranscriptsErr(d.error ?? 'Failed to pull transcripts'); return; }
-      setTranscripts(d.transcripts ?? []);
+      const items: TranscriptItem[] = d.transcripts ?? [];
+      setTranscripts(items);
+      setOpenTranscripts(new Set(items.map((t) => t.video_id)));
     } catch { setTranscriptsErr('Network error'); }
     finally { setTranscriptsLoading(false); }
   }
@@ -278,6 +405,23 @@ export default function ProjectAnalyticsPage() {
   const igSnap   = data?.instagram?.latest_snapshot;
   const igSnaps  = data?.instagram?.snapshots ?? [];
   const igPosts  = igSnap?.posts ?? [];
+
+  // Per-metric distributions across all of this client's content, so each
+  // expanded row can show how that one video/post ranks (e.g. "No 1" / "Top 5%").
+  const pctEng = (r: number) => Math.round(r * 10000) / 100;
+  const ttPeers: Record<string, number[]> = {
+    views:      ttVideos.map((v) => v.views),
+    likes:      ttVideos.map((v) => v.likes),
+    comments:   ttVideos.map((v) => v.comments),
+    shares:     ttVideos.map((v) => v.shares),
+    engagement: ttVideos.map((v) => pctEng(v.engagement_rate)),
+  };
+  const igPeers: Record<string, number[]> = {
+    views:      igPosts.map((p) => p.views ?? 0),
+    likes:      igPosts.map((p) => p.likes),
+    comments:   igPosts.map((p) => p.comments),
+    engagement: igPosts.map((p) => pctEng(p.engagement_rate)),
+  };
 
   const ttTotalViews   = ttVideos.reduce((s, v) => s + v.views, 0);
   const igTotalViews   = igPosts.reduce((s, p) => s + (p.views ?? 0), 0);
@@ -528,20 +672,44 @@ export default function ProjectAnalyticsPage() {
                                 return (ttDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
                               });
                               const page = sorted.slice(ttPage * PAGE_SIZE, (ttPage + 1) * PAGE_SIZE);
-                              return page.map((v) => (
-                                <TableRow key={v.video_id}>
-                                  <TableCell className="max-w-[220px] truncate pl-6 font-medium">
-                                    {v.title && data?.tiktok?.handle
-                                      ? <a href={`https://www.tiktok.com/@${data.tiktok.handle}/video/${v.video_id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title}</a>
-                                      : v.title ? (v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title) : <span className="text-muted-foreground">—</span>}
-                                  </TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.views)}</TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.likes)}</TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.comments)}</TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.shares)}</TableCell>
-                                  <TableCell className="text-xs font-medium tabular-nums">{(v.engagement_rate * 100).toFixed(2)}%</TableCell>
-                                </TableRow>
-                              ));
+                              return page.map((v) => {
+                                const open = openTtRows.has(v.video_id);
+                                return (
+                                  <Fragment key={v.video_id}>
+                                    <TableRow className="cursor-pointer" onClick={() => toggleRow(setOpenTtRows, v.video_id)}>
+                                      <TableCell className="pl-6 font-medium">
+                                        <div className="flex items-center gap-2">
+                                          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                                          <span className="min-w-0 max-w-[200px] truncate">
+                                            {v.title && data?.tiktok?.handle
+                                              ? <a href={`https://www.tiktok.com/@${data.tiktok.handle}/video/${v.video_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">{v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title}</a>
+                                              : v.title ? (v.title.length > 50 ? v.title.slice(0, 50) + '…' : v.title) : <span className="text-muted-foreground">—</span>}
+                                          </span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.views)}</TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.likes)}</TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.comments)}</TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(v.shares)}</TableCell>
+                                      <TableCell className="text-xs font-medium tabular-nums">{(v.engagement_rate * 100).toFixed(2)}%</TableCell>
+                                    </TableRow>
+                                    {open && (
+                                      <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={6} className="bg-muted/20 px-6 py-4">
+                                          <VideoHistoryCharts
+                                            history={data?.tiktok?.history?.[v.video_id]}
+                                            includeShares
+                                            thumbnail={v.thumbnail_url}
+                                            title={v.title}
+                                            url={data?.tiktok?.handle ? `https://www.tiktok.com/@${data.tiktok.handle}/video/${v.video_id}` : undefined}
+                                            peers={ttPeers}
+                                          />
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </Fragment>
+                                );
+                              });
                             })()}
                           </TableBody>
                         </Table>
@@ -587,12 +755,12 @@ export default function ProjectAnalyticsPage() {
                             <p className="py-2 text-sm text-muted-foreground">No videos available to transcribe.</p>
                           )}
                           {transcripts.map((t, i) => {
-                            const open = openTranscript === t.video_id;
+                            const open = openTranscripts.has(t.video_id);
                             return (
                               <div key={t.video_id} className="rounded-xl border">
                                 <button
                                   type="button"
-                                  onClick={() => setOpenTranscript(open ? null : t.video_id)}
+                                  onClick={() => setOpenTranscripts((s) => { const n = new Set(s); n.has(t.video_id) ? n.delete(t.video_id) : n.add(t.video_id); return n; })}
                                   className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted/40"
                                 >
                                   <span className="font-mono text-xs text-muted-foreground tabular-nums">{i + 1}</span>
@@ -772,19 +940,43 @@ export default function ProjectAnalyticsPage() {
                                 return (igDir === 'asc' ? 1 : -1) * (av < bv ? -1 : av > bv ? 1 : 0);
                               });
                               const page = sorted.slice(igPage * PAGE_SIZE, (igPage + 1) * PAGE_SIZE);
-                              return page.map((p) => (
-                                <TableRow key={p.post_id}>
-                                  <TableCell className="max-w-[220px] truncate pl-6 font-medium">
-                                    {p.caption && p.post_id
-                                      ? <a href={`https://www.instagram.com/p/${p.post_id}/`} target="_blank" rel="noopener noreferrer" className="hover:underline">{p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption}</a>
-                                      : p.caption ? (p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption) : <span className="text-muted-foreground">—</span>}
-                                  </TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{p.views !== null ? fmt(p.views) : '—'}</TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(p.likes)}</TableCell>
-                                  <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(p.comments)}</TableCell>
-                                  <TableCell className="text-xs font-medium tabular-nums">{(p.engagement_rate * 100).toFixed(2)}%</TableCell>
-                                </TableRow>
-                              ));
+                              return page.map((p) => {
+                                const open = openIgRows.has(p.post_id);
+                                return (
+                                  <Fragment key={p.post_id}>
+                                    <TableRow className="cursor-pointer" onClick={() => toggleRow(setOpenIgRows, p.post_id)}>
+                                      <TableCell className="pl-6 font-medium">
+                                        <div className="flex items-center gap-2">
+                                          <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                                          <span className="min-w-0 max-w-[200px] truncate">
+                                            {p.caption && p.post_id
+                                              ? <a href={`https://www.instagram.com/p/${p.post_id}/`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:underline">{p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption}</a>
+                                              : p.caption ? (p.caption.length > 50 ? p.caption.slice(0, 50) + '…' : p.caption) : <span className="text-muted-foreground">—</span>}
+                                          </span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{p.views !== null ? fmt(p.views) : '—'}</TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(p.likes)}</TableCell>
+                                      <TableCell className="text-xs tabular-nums text-muted-foreground">{fmt(p.comments)}</TableCell>
+                                      <TableCell className="text-xs font-medium tabular-nums">{(p.engagement_rate * 100).toFixed(2)}%</TableCell>
+                                    </TableRow>
+                                    {open && (
+                                      <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={5} className="bg-muted/20 px-6 py-4">
+                                          <VideoHistoryCharts
+                                            history={data?.instagram?.history?.[p.post_id]}
+                                            includeShares={false}
+                                            thumbnail={p.thumbnail_url}
+                                            title={p.caption}
+                                            url={p.post_id ? `https://www.instagram.com/p/${p.post_id}/` : undefined}
+                                            peers={igPeers}
+                                          />
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </Fragment>
+                                );
+                              });
                             })()}
                           </TableBody>
                         </Table>
