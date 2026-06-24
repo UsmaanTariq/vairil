@@ -3,13 +3,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '@/lib/db';
 import { callAgent } from '@/lib/anthropic';
 import { ideasPrompt } from '@/lib/prompts/ideas';
-import { criticPrompt } from '@/lib/prompts/critic';
-import { IdeasOutputSchema, CriticOutputSchema, type Idea } from '@/lib/schemas';
+import { IdeasOutputSchema } from '@/lib/schemas';
 
-const MAX_CRITIC_RETRIES = 1;
-
-const GEN_MODEL    = 'claude-opus-4-8';
-const CRITIC_MODEL = 'claude-haiku-4-5';
+// Single fast generation pass on Sonnet at low effort. The human like/dislike
+// loop is the quality gate now, so the old critic→regenerate round (which
+// roughly doubled latency) has been removed.
+const GEN_MODEL = 'claude-sonnet-4-6';
 
 const returnIdeasTool: Anthropic.Tool = {
   name: 'return_ideas',
@@ -38,29 +37,6 @@ const returnIdeasTool: Anthropic.Tool = {
       },
     },
     required: ['ideas'],
-  },
-};
-
-const returnCritiqueTool: Anthropic.Tool = {
-  name: 'return_critique',
-  description: 'Return a quality review for each content idea',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      results: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            ideaTitle: { type: 'string' },
-            keep: { type: 'boolean' },
-            reasons: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['ideaTitle', 'keep', 'reasons'],
-        },
-      },
-    },
-    required: ['results'],
   },
 };
 
@@ -185,107 +161,16 @@ export async function POST(req: NextRequest) {
       dislikedBlock,
     ].join('\n');
 
-    // --- Initial generation ---
-    const initialResult = await callAgent({
+    // Single fast generation pass.
+    const { ideas: currentIdeas } = await callAgent({
       system: ideasPrompt,
       input: `${baseInput}\n\nGenerate 6 ideas. Replace {N} in your instructions with 6.`,
       schema: IdeasOutputSchema,
       tools: [returnIdeasTool],
       toolChoice: { type: 'tool', name: 'return_ideas' },
       model: GEN_MODEL,
-      effort: 'medium',
+      effort: 'low',
     });
-
-    let currentIdeas: Idea[] = initialResult.ideas;
-    let criticRounds = 0;
-    let totalRegenerated = 0;
-
-    // --- Critic loop (max MAX_CRITIC_RETRIES rounds) ---
-    for (let retry = 0; retry < MAX_CRITIC_RETRIES; retry++) {
-      const ideasForCritic = currentIdeas
-        .map(
-          (idea, i) =>
-            `Idea ${i + 1}: "${idea.title}"\n` +
-            `Trend: ${idea.trendRef}\n` +
-            `Hook: ${idea.hook}\n` +
-            `Script: ${idea.script}\n` +
-            `Shot list: ${idea.shotList.join('; ')}\n` +
-            `Why it works: ${idea.why}`
-        )
-        .join('\n\n---\n\n');
-
-      const criticInput = [
-        profileBlock,
-        ``,
-        `IDEAS TO REVIEW:`,
-        ideasForCritic,
-      ].join('\n');
-
-      const critique = await callAgent({
-        system: criticPrompt,
-        input: criticInput,
-        schema: CriticOutputSchema,
-        tools: [returnCritiqueTool],
-        toolChoice: { type: 'tool', name: 'return_critique' },
-        model: CRITIC_MODEL,
-        temperature: 0.2,
-      });
-
-      criticRounds++;
-
-      const rejected = critique.results.filter((r) => !r.keep);
-      if (rejected.length === 0) break;
-
-      // Build feedback block for regeneration
-      const feedbackBlock = rejected
-        .map(
-          (r) =>
-            `"${r.ideaTitle}" — reasons for rejection:\n` +
-            r.reasons.map((reason) => `  - ${reason}`).join('\n')
-        )
-        .join('\n\n');
-
-      const rejectedTitles = new Set(rejected.map((r) => r.ideaTitle));
-      const keptIdeas = currentIdeas.filter((idea) => !rejectedTitles.has(idea.title));
-      const keptIdeasBlock =
-        keptIdeas.length > 0
-          ? `\nKEPT IDEAS (replacement ideas must differ in angle and hook from all of these):\n` +
-            keptIdeas.map((i) => `- "${i.title}" — Hook: ${i.hook}`).join('\n')
-          : '';
-
-      const regenerateInput = [
-        baseInput,
-        ``,
-        `REJECTED IDEAS — feedback below. Generate ${rejected.length} replacement idea${rejected.length !== 1 ? 's' : ''} that fix these issues. Do NOT reuse the rejected titles.`,
-        ``,
-        feedbackBlock,
-        keptIdeasBlock,
-        ``,
-        `Replace {N} in your instructions with ${rejected.length}.`,
-      ].join('\n');
-
-      const replacements = await callAgent({
-        system: ideasPrompt,
-        input: regenerateInput,
-        schema: IdeasOutputSchema,
-        tools: [returnIdeasTool],
-        toolChoice: { type: 'tool', name: 'return_ideas' },
-        model: GEN_MODEL,
-        effort: 'medium',
-      });
-
-      // Splice replacements in — preserve positions of kept ideas
-      let replacementIdx = 0;
-
-      currentIdeas = currentIdeas.map((idea) => {
-        if (rejectedTitles.has(idea.title) && replacementIdx < replacements.ideas.length) {
-          return replacements.ideas[replacementIdx++];
-        }
-        return idea;
-      });
-
-      totalRegenerated += rejected.length;
-    }
 
     // Append new ideas as status 'new' (do NOT delete existing).
     if (currentIdeas.length > 0) {
@@ -306,10 +191,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      ideas: currentIdeas,
-      meta: { criticRounds, regeneratedCount: totalRegenerated },
-    });
+    return NextResponse.json({ ideas: currentIdeas });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to generate ideas';
     return NextResponse.json({ error: message }, { status: 500 });
