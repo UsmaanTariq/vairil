@@ -8,6 +8,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Pie,
+  PieChart,
+  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -121,7 +124,6 @@ const STAGE_LABELS: Record<string, string> = {
   done:      'Export',
 };
 
-const STAGES = ['intake', 'interview', 'synthesis', 'research', 'ideas', 'done'];
 
 function MiniSparkline({ data, up }: { data: number[]; up: boolean }) {
   if (data.length < 2) return null;
@@ -210,6 +212,10 @@ export default function DashboardPage() {
 
   const [combinedTrend, setCombinedTrend] = useState<{ date: string; views: number }[]>([]);
 
+  interface ViewsBreakdownItem { project_id: string; client_name: string; views: number; fill: string }
+  const [viewsBreakdown, setViewsBreakdown] = useState<ViewsBreakdownItem[]>([]);
+  const [engagementTrend, setEngagementTrend] = useState<{ date: string; rate: number }[]>([]);
+
   interface Kpis {
     views:     { today: number; delta_pct: number | null };
     followers: { total: number; delta_pct: number | null };
@@ -220,18 +226,28 @@ export default function DashboardPage() {
   const [velocity, setVelocity] = useState<Record<string, { trend: number[]; delta_pct: number | null }>>({});
 
   useEffect(() => {
+    const DONUT_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
     Promise.all([
       fetch('/api/projects').then((r) => r.json()),
       fetch('/api/ideas/recent').then((r) => r.json()),
       fetch('/api/analytics/combined-views').then((r) => r.json()),
       fetch('/api/analytics/kpis').then((r) => r.json()),
       fetch('/api/analytics/velocity').then((r) => r.json()),
-    ]).then(([projectsData, ideasData, trendData, kpisData, velocityData]) => {
+      fetch('/api/analytics/views-by-project').then((r) => r.json()),
+      fetch('/api/analytics/engagement-trend').then((r) => r.json()),
+    ]).then(([projectsData, ideasData, trendData, kpisData, velocityData, breakdownData, engData]) => {
       setProjects(projectsData.projects ?? []);
       setRecentIdeas(ideasData.ideas ?? []);
       setCombinedTrend(trendData.trend ?? []);
       setKpis(kpisData);
       setVelocity(velocityData.velocity ?? {});
+      setViewsBreakdown(
+        (breakdownData.breakdown ?? []).map((item: { project_id: string; client_name: string; views: number }, i: number) => ({
+          ...item,
+          fill: DONUT_COLORS[i % DONUT_COLORS.length],
+        }))
+      );
+      setEngagementTrend(engData.trend ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -302,14 +318,6 @@ export default function DashboardPage() {
   }));
 
   const latestCumulative = combinedTrend.length ? combinedTrend[combinedTrend.length - 1].views : 0;
-
-  // Pipeline distribution by stage.
-  const stageCounts = STAGES.map((s) => ({
-    stage: s,
-    label: STAGE_LABELS[s] ?? s,
-    count: projects.filter((p) => p.status === s).length,
-  }));
-  const maxStageCount = Math.max(1, ...stageCounts.map((s) => s.count));
 
   // Top accounts by combined followers.
   const topAccounts = [...projects]
@@ -430,41 +438,89 @@ export default function DashboardPage() {
 
           <Card className="lg:col-span-1 dark:bg-transparent">
             <CardHeader>
-              <CardTitle>Pipeline</CardTitle>
-              <CardDescription>Projects by stage.</CardDescription>
+              <CardTitle>Views by client</CardTitle>
+              <CardDescription>Share of total views per project.</CardDescription>
             </CardHeader>
-            <CardContent className="px-0 py-2">
-              <ShareBarList>
-                {stageCounts.map((s) => (
-                  <ShareBarListItem key={s.stage} value={(s.count / maxStageCount) * 100}>
-                    <ShareBarListContent>
-                      <ShareBarListLabel>{s.label}</ShareBarListLabel>
-                      <ShareBarListValue>{s.count}</ShareBarListValue>
-                    </ShareBarListContent>
-                    <ShareBarListFill />
-                  </ShareBarListItem>
-                ))}
-              </ShareBarList>
+            <CardContent className="flex flex-col gap-4">
+              {viewsBreakdown.length > 0 ? (
+                <>
+                  <PieChart width={180} height={180} className="mx-auto">
+                    <Pie
+                      data={viewsBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="views"
+                      stroke="none"
+                    />
+                    <Tooltip
+                      formatter={(v) => [typeof v === 'number' ? (fmt(v) ?? v) : v, 'Views']}
+                      contentStyle={{
+                        backgroundColor: 'var(--popover)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        color: 'var(--popover-foreground)',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </PieChart>
+                  <ul className="flex flex-col gap-1.5">
+                    {viewsBreakdown.map((item) => {
+                      const total = viewsBreakdown.reduce((s, i) => s + i.views, 0);
+                      const pct = total > 0 ? Math.round((item.views / total) * 100) : 0;
+                      return (
+                        <li key={item.project_id} className="flex items-center gap-2 text-xs cursor-pointer hover:opacity-80"
+                          onClick={() => router.push(`/project/${item.project_id}`)}>
+                          <span className="size-2.5 shrink-0 rounded-full" style={{ background: item.fill }} />
+                          <span className="flex-1 truncate text-muted-foreground">{item.client_name}</span>
+                          <span className="tabular-nums font-medium">{pct}%</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              ) : (
+                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                  {loading ? 'Loading…' : 'No view data yet.'}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Per-day views + top accounts */}
+        {/* Engagement rate + top accounts */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card className="dark:bg-transparent">
             <CardHeader>
-              <CardTitle>Views per day</CardTitle>
-              <CardDescription>Daily gain (TikTok + Instagram).</CardDescription>
+              <CardTitle>Avg engagement rate</CardTitle>
+              <CardDescription>Daily average across all accounts (TikTok + Instagram).</CardDescription>
             </CardHeader>
             <CardContent>
-              {combinedPerDay.length >= 1 ? (
-                <ChartContainer className="aspect-auto h-56 w-full" config={viewsConfig}>
-                  <BarChart accessibilityLayer data={combinedPerDay} margin={{ left: 12, right: 12 }}>
+              {engagementTrend.length >= 2 ? (
+                <ChartContainer className="aspect-auto h-56 w-full" config={{ rate: { label: 'Engagement', color: 'var(--chart-2)' } }}>
+                  <AreaChart accessibilityLayer data={engagementTrend} margin={{ left: 12, right: 12 }}>
+                    <defs>
+                      <linearGradient id="dash-eng" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid vertical={false} />
                     <XAxis axisLine={false} dataKey="date" tickLine={false} tickMargin={8} />
-                    <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--muted)', opacity: 0.4 }} />
-                    <Bar dataKey="views" name="Views gained" fill="var(--color-views)" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                  </BarChart>
+                    <YAxis axisLine={false} tickLine={false} width={44} tickMargin={4}
+                      domain={paddedDomain(engagementTrend.map((d) => d.rate))}
+                      tickFormatter={(v) => `${v}%`} />
+                    <ChartTooltip
+                      content={<ChartTooltipContent indicator="dashed" />}
+                      cursor={{ stroke: 'var(--chart-2)', strokeDasharray: '3 3', strokeLinecap: 'round' }}
+                      wrapperStyle={{ outline: 'none' }}
+                    />
+                    <Area dataKey="rate" name="Engagement %" type="monotone" stroke="var(--chart-2)"
+                      strokeWidth={2} fill="url(#dash-eng)" isAnimationActive={false}
+                      dot={{ fill: 'var(--chart-2)', r: 2, strokeWidth: 2 }} />
+                  </AreaChart>
                 </ChartContainer>
               ) : (
                 <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">

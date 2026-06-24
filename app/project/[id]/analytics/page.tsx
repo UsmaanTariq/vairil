@@ -109,11 +109,11 @@ const GRID_V = { strokeDasharray: '4 4', stroke: 'var(--border)', horizontal: fa
 const BAR_CURSOR = { fill: 'color-mix(in srgb, var(--foreground) 8%, transparent)' } as const;
 const LINE_CURSOR = { stroke: 'var(--border)', strokeWidth: 1 } as const;
 
-function StatCard({ label, value, icon: Icon }: {
-  label: string; value: string; icon: LucideIcon;
+function StatCard({ label, value, icon: Icon, delay = '' }: {
+  label: string; value: string; icon: LucideIcon; delay?: string;
 }) {
   return (
-    <Card className="dark:bg-transparent">
+    <Card className={`dark:bg-transparent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards duration-500 ${delay}`}>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div className="flex flex-col gap-1.5">
           <CardDescription className="flex items-center gap-2">
@@ -127,11 +127,11 @@ function StatCard({ label, value, icon: Icon }: {
   );
 }
 
-function ChartCard({ title, children, className }: {
-  title: string; children: React.ReactNode; className?: string;
+function ChartCard({ title, children, className, delay = '' }: {
+  title: string; children: React.ReactNode; className?: string; delay?: string;
 }) {
   return (
-    <Card className={`dark:bg-transparent ${className ?? ''}`}>
+    <Card className={`dark:bg-transparent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards duration-500 ${delay} ${className ?? ''}`}>
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
@@ -367,9 +367,9 @@ export default function ProjectAnalyticsPage() {
 
           {/* Top KPIs */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Combined views"  value={fmt(combinedViews || null)}              icon={Eye} />
-            <StatCard label="Total followers" value={fmt(totalFollowers || null)}             icon={UserRound} />
-            <StatCard label="Avg engagement"  value={`${(combinedAvgEng * 100).toFixed(2)}%`} icon={TrendingUp} />
+            <StatCard label="Combined views"  value={fmt(combinedViews || null)}              icon={Eye}        delay="delay-0" />
+            <StatCard label="Total followers" value={fmt(totalFollowers || null)}             icon={UserRound}  delay="delay-75" />
+            <StatCard label="Avg engagement"  value={`${(combinedAvgEng * 100).toFixed(2)}%`} icon={TrendingUp} delay="delay-150" />
           </div>
 
           {/* Platform tabs */}
@@ -421,7 +421,7 @@ export default function ProjectAnalyticsPage() {
                   </Card>
 
                   {ttTrendData.length > 0 && (
-                    <ChartCard title="Follower trend">
+                    <ChartCard title="Follower trend" delay="delay-100">
                       <ResponsiveContainer width="100%" height={200}>
                         <AreaChart data={ttTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                           <defs>
@@ -442,7 +442,7 @@ export default function ProjectAnalyticsPage() {
 
                   {ttViewsCumulative.some((d) => d.views > 0) && (
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <ChartCard title="Cumulative views">
+                      <ChartCard title="Cumulative views" delay="delay-150">
                         <ResponsiveContainer width="100%" height={200}>
                           <AreaChart data={ttViewsCumulative} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                             <defs>
@@ -459,7 +459,7 @@ export default function ProjectAnalyticsPage() {
                           </AreaChart>
                         </ResponsiveContainer>
                       </ChartCard>
-                      <ChartCard title="Views per day">
+                      <ChartCard title="Views per day" delay="delay-200">
                         {ttViewsPerDay.length > 0 ? (
                           <ResponsiveContainer width="100%" height={200}>
                             <BarChart data={ttViewsPerDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -481,7 +481,7 @@ export default function ProjectAnalyticsPage() {
 
                   {ttVideos.length > 0 && (
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <ChartCard title="Top videos by views">
+                      <ChartCard title="Top videos by views" delay="delay-200">
                         <ResponsiveContainer width="100%" height={Math.max(200, ttTopByViews.length * 38)}>
                           <BarChart layout="vertical" data={ttTopByViews} margin={{ left: 0, right: 12 }}>
                             <CartesianGrid {...GRID_V} />
@@ -492,7 +492,7 @@ export default function ProjectAnalyticsPage() {
                           </BarChart>
                         </ResponsiveContainer>
                       </ChartCard>
-                      <ChartCard title="Engagement rate (%)">
+                      <ChartCard title="Engagement rate (%)" delay="delay-300">
                         <ResponsiveContainer width="100%" height={280}>
                           <BarChart data={ttByEngagement} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                             <CartesianGrid {...GRID_H} />
@@ -593,29 +593,34 @@ export default function ProjectAnalyticsPage() {
                                 <button
                                   type="button"
                                   onClick={() => setOpenTranscript(open ? null : t.video_id)}
-                                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted/40"
                                 >
                                   <span className="font-mono text-xs text-muted-foreground tabular-nums">{i + 1}</span>
                                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
                                     {t.title || t.video_id}
                                   </span>
                                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmt(t.views)} views</span>
-                                  <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+                                  <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
                                 </button>
-                                {open && (
-                                  <div className="border-t px-4 py-3">
-                                    {t.error ? (
-                                      <p className="text-sm text-destructive">Couldn’t transcribe: {t.error}</p>
-                                    ) : t.transcript ? (
-                                      <p className="max-h-64 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{t.transcript}</p>
-                                    ) : (
-                                      <p className="text-sm text-muted-foreground">No transcript returned.</p>
-                                    )}
-                                    <a href={t.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground hover:underline">
-                                      Open on TikTok ↗
-                                    </a>
+                                <div
+                                  className="grid transition-all duration-300 ease-in-out"
+                                  style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+                                >
+                                  <div className="overflow-hidden">
+                                    <div className="border-t px-4 py-3">
+                                      {t.error ? (
+                                        <p className="text-sm text-destructive">Could not transcribe: {t.error}</p>
+                                      ) : t.transcript ? (
+                                        <p className="max-h-64 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{t.transcript}</p>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground">No transcript returned.</p>
+                                      )}
+                                      <a href={t.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground hover:underline">
+                                        Open on TikTok ↗
+                                      </a>
+                                    </div>
                                   </div>
-                                )}
+                                </div>
                               </div>
                             );
                           })}
