@@ -7,15 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { GenerationProgress } from '@/components/generation-progress';
 import { IDEAS_GENERATION_STEPS } from '@/lib/generation-steps';
@@ -78,6 +70,15 @@ export default function IdeasPage() {
       hashtagsText: idea.hashtags.join(', '),
       why: idea.why,
     });
+  }
+
+  function updateDraft(patch: Partial<EditDraft>) {
+    setDraft((p) => (p ? { ...p, ...patch } : p));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
   }
 
   async function handleSaveEdit() {
@@ -402,6 +403,7 @@ export default function IdeasPage() {
               {visibleIdeas.map((idea) => {
                 const isPending = pendingId === idea.id;
                 const showDislikePicker = dislikePickerId === idea.id;
+                const isEditing = editingId === idea.id;
 
                 return (
                   <Card
@@ -416,9 +418,18 @@ export default function IdeasPage() {
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-3">
-                        <CardTitle className="text-base font-semibold leading-snug">
-                          {idea.title}
-                        </CardTitle>
+                        {isEditing ? (
+                          <Input
+                            value={draft?.title ?? ''}
+                            onChange={(e) => updateDraft({ title: e.target.value })}
+                            placeholder="Title"
+                            className="text-base font-semibold"
+                          />
+                        ) : (
+                          <CardTitle className="text-base font-semibold leading-snug">
+                            {idea.title}
+                          </CardTitle>
+                        )}
                         <div className="flex items-center gap-2 shrink-0">
                           <Badge variant="secondary" className="text-xs">
                             {idea.trendRef}
@@ -433,22 +444,57 @@ export default function IdeasPage() {
                               Disliked
                             </Badge>
                           )}
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="ghost"
-                            onClick={() => openEdit(idea)}
-                            disabled={isPending}
-                            aria-label="Edit idea"
-                            className="text-muted-foreground"
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
+                          {!isEditing && (
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              onClick={() => openEdit(idea)}
+                              disabled={isPending}
+                              aria-label="Edit idea"
+                              className="text-muted-foreground"
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardHeader>
 
                     <CardContent className="space-y-5 text-sm">
+                      {isEditing && draft ? (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Hook — first 3 seconds</p>
+                            <Textarea rows={2} value={draft.hook} onChange={(e) => updateDraft({ hook: e.target.value })} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Script / voiceover</p>
+                            <Textarea rows={5} value={draft.script} onChange={(e) => updateDraft({ script: e.target.value })} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Shot list (one per line)</p>
+                            <Textarea rows={5} value={draft.shotListText} onChange={(e) => updateDraft({ shotListText: e.target.value })} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Audio / sound</p>
+                            <Input value={draft.audio} onChange={(e) => updateDraft({ audio: e.target.value })} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Caption</p>
+                            <Textarea rows={2} value={draft.caption} onChange={(e) => updateDraft({ caption: e.target.value })} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Hashtags (comma-separated)</p>
+                            <Input value={draft.hashtagsText} onChange={(e) => updateDraft({ hashtagsText: e.target.value })} />
+                          </div>
+                          <div className="border-t border-border pt-3">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Why this works</p>
+                            <Textarea rows={2} value={draft.why} onChange={(e) => updateDraft({ why: e.target.value })} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-5">
                       {/* Hook */}
                       <div className="rounded-md bg-muted px-4 py-3">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
@@ -530,9 +576,34 @@ export default function IdeasPage() {
                           </Badge>
                         </div>
                       )}
+                        </div>
+                      )}
 
                       {/* Per-card actions */}
                       <div className="border-t border-border pt-3 space-y-3">
+                        {isEditing ? (
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleSaveEdit}
+                              disabled={savingEdit || !draft?.title.trim()}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                            >
+                              {savingEdit ? 'Saving…' : 'Save'}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={cancelEdit}
+                              disabled={savingEdit}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
                         {idea.status === 'new' && (
                           <>
                             {showDislikePicker ? (
@@ -625,6 +696,8 @@ export default function IdeasPage() {
                             {isPending ? '…' : 'Restore'}
                           </Button>
                         )}
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -650,109 +723,6 @@ export default function IdeasPage() {
         </>
       )}
 
-      {/* Edit idea dialog */}
-      <Dialog
-        open={!!editingId}
-        onOpenChange={(o) => {
-          if (!o) {
-            setEditingId(null);
-            setDraft(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit idea</DialogTitle>
-          </DialogHeader>
-          {draft && (
-            <div className="grid gap-4 py-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-title">Title</Label>
-                <Input
-                  id="edit-title"
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-hook">Hook (first 3 seconds)</Label>
-                <Textarea
-                  id="edit-hook"
-                  rows={2}
-                  value={draft.hook}
-                  onChange={(e) => setDraft({ ...draft, hook: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-script">Script / voiceover</Label>
-                <Textarea
-                  id="edit-script"
-                  rows={5}
-                  value={draft.script}
-                  onChange={(e) => setDraft({ ...draft, script: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-shotlist">Shot list (one per line)</Label>
-                <Textarea
-                  id="edit-shotlist"
-                  rows={5}
-                  value={draft.shotListText}
-                  onChange={(e) => setDraft({ ...draft, shotListText: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-audio">Audio / sound</Label>
-                <Input
-                  id="edit-audio"
-                  value={draft.audio}
-                  onChange={(e) => setDraft({ ...draft, audio: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-caption">Caption</Label>
-                <Textarea
-                  id="edit-caption"
-                  rows={2}
-                  value={draft.caption}
-                  onChange={(e) => setDraft({ ...draft, caption: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-hashtags">Hashtags (comma-separated)</Label>
-                <Input
-                  id="edit-hashtags"
-                  value={draft.hashtagsText}
-                  onChange={(e) => setDraft({ ...draft, hashtagsText: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="edit-why">Why this works</Label>
-                <Textarea
-                  id="edit-why"
-                  rows={2}
-                  value={draft.why}
-                  onChange={(e) => setDraft({ ...draft, why: e.target.value })}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingId(null);
-                setDraft(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSaveEdit} disabled={savingEdit || !draft?.title.trim()}>
-              {savingEdit ? 'Saving…' : 'Save changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
