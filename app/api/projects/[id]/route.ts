@@ -27,7 +27,12 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
-  const { tiktok_handle: rawTikTok, instagram_handle: rawInstagram, ...rest } = body;
+  const {
+    tiktok_handle: rawTikTok,
+    instagram_handle: rawInstagram,
+    value_per_1k_views: rawRpm,
+    ...rest
+  } = body;
 
   const tiktok_handle    = rawTikTok    ? String(rawTikTok).replace(/^@/, '').trim()    : undefined;
   const instagram_handle = rawInstagram ? String(rawInstagram).replace(/^@/, '').trim() : undefined;
@@ -35,6 +40,11 @@ export async function PATCH(
   const updatePayload: Record<string, unknown> = { ...rest };
   if (tiktok_handle    !== undefined) updatePayload.tiktok_handle    = tiktok_handle    || null;
   if (instagram_handle !== undefined) updatePayload.instagram_handle = instagram_handle || null;
+  // Estimated revenue per 1,000 views — empty/invalid clears it, negatives are rejected.
+  if (rawRpm !== undefined) {
+    const n = rawRpm === null || rawRpm === '' ? null : Number(rawRpm);
+    updatePayload.value_per_1k_views = n !== null && Number.isFinite(n) && n >= 0 ? n : null;
+  }
 
   const { data, error } = await supabase
     .from('projects')

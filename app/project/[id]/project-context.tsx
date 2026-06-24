@@ -12,6 +12,7 @@ export type Project = {
   created_at: string;
   tiktok_handle: string | null;
   instagram_handle: string | null;
+  value_per_1k_views: number | null;
 };
 
 type Ctx = {
