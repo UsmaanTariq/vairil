@@ -13,6 +13,7 @@ export interface InstagramPostStat {
   comments:        number;
   engagement_rate: number;
   thumbnail_url:   string | null;
+  created_at:      number | null; // unix seconds the post was published
 }
 
 const BASE = `https://${process.env.RAPIDAPI_INSTAGRAM_HOST}`;
@@ -98,6 +99,9 @@ export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
       comments,
       engagement_rate,
       thumbnail_url: (candidates[0]?.url ?? null) as string | null,
+      created_at: typeof item.taken_at === 'number' ? item.taken_at
+                : typeof item.taken_at === 'string' ? Number(item.taken_at) || null
+                : null,
     };
   });
 }

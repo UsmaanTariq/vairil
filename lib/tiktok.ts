@@ -14,6 +14,7 @@ export interface TikTokVideoStat {
   shares:          number;
   engagement_rate: number;
   thumbnail_url:   string | null;
+  created_at:      number | null; // unix seconds the video was posted
 }
 
 const BASE = `https://${process.env.RAPIDAPI_TIKTOK_HOST}`;
@@ -83,6 +84,9 @@ export async function getVideos(secUid: string): Promise<TikTokVideoStat[]> {
         ? Math.round(((likes + comments + shares) / views) * 10000) / 10000
         : 0,
       thumbnail_url: (vid.originCover ?? vid.cover ?? null) as string | null,
+      created_at: typeof v.createTime === 'number' ? v.createTime
+                : typeof v.createTime === 'string' ? Number(v.createTime) || null
+                : null,
     };
   });
 }

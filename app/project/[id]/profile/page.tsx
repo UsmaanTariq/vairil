@@ -34,6 +34,7 @@ export default function ProfilePage() {
 
   // Revenue/ROI assumption — kept as a string so the field can be cleared/typed freely.
   const [rate, setRate] = useState(project.value_per_1k_views?.toString() ?? "");
+  const [retainer, setRetainer] = useState(project.monthly_retainer?.toString() ?? "");
   const [savingRate, setSavingRate] = useState(false);
   const [totalViews, setTotalViews] = useState<number | null>(null);
 
@@ -72,7 +73,10 @@ export default function ProfilePage() {
     await fetch(`/api/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value_per_1k_views: rate.trim() === "" ? null : rate.trim() }),
+      body: JSON.stringify({
+        value_per_1k_views: rate.trim() === "" ? null : rate.trim(),
+        monthly_retainer: retainer.trim() === "" ? null : retainer.trim(),
+      }),
     });
     await refresh();
     setSavingRate(false);
@@ -81,6 +85,10 @@ export default function ProfilePage() {
   const rateNum = rate.trim() === "" ? null : Number(rate);
   const validRate = rateNum !== null && Number.isFinite(rateNum) && rateNum >= 0;
   const estRevenue = validRate && totalViews ? (totalViews / 1000) * rateNum : null;
+
+  const retainerNum = retainer.trim() === "" ? null : Number(retainer);
+  const validRetainer = retainerNum !== null && Number.isFinite(retainerNum) && retainerNum > 0;
+  const roiMultiple = estRevenue !== null && validRetainer ? estRevenue / retainerNum : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -114,8 +122,28 @@ export default function ProfilePage() {
             <p className="text-xs text-muted-foreground">e.g. £10 means every 1,000 views ≈ £10 of value to the business.</p>
           </div>
 
+          <div className="grid gap-1.5 sm:max-w-xs">
+            <Label htmlFor="retainer">Monthly retainer</Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">£</span>
+              <Input
+                id="retainer"
+                type="number"
+                min="0"
+                step="50"
+                inputMode="decimal"
+                placeholder="2000"
+                value={retainer}
+                onChange={(e) => setRetainer(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveRate()}
+                className="pl-7"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">What the client pays you each month. Used to show their return multiple in the ROI report.</p>
+          </div>
+
           <div className="flex items-center gap-3">
-            <Button onClick={saveRate} disabled={savingRate}>{savingRate ? "Saving…" : "Save rate"}</Button>
+            <Button onClick={saveRate} disabled={savingRate}>{savingRate ? "Saving…" : "Save"}</Button>
           </div>
 
           {/* Live estimate */}
@@ -128,6 +156,11 @@ export default function ProfilePage() {
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {fmtViews(totalViews)} total tracked views × {gbp(rateNum)} per 1,000
               </p>
+              {roiMultiple !== null && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  ≈ <span className="font-medium text-foreground">{roiMultiple.toFixed(1)}×</span> return on the {gbp(retainerNum!)}/mo retainer
+                </p>
+              )}
             </div>
           )}
           {validRate && totalViews === 0 && (

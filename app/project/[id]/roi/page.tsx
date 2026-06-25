@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PoundSterling, TrendingUp, Film, Trophy, type LucideIcon } from "lucide-react";
+import { PoundSterling, Eye, Film, Trophy, Gauge, Download, type LucideIcon } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,22 +11,10 @@ import {
 import { useProject } from "../project-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-// ── Types we consume from /api/projects/[id]/analytics ───────────────────────
-interface VideoStat { video_id: string; title: string; views: number; thumbnail_url: string | null }
-interface PostStat  { post_id: string; caption: string; views: number | null; thumbnail_url: string | null }
-interface TrendPoint { fetched_at: string; views?: number }
-interface AnalyticsData {
-  tiktok:    { latest_snapshot: { videos?: VideoStat[] } | null; snapshots: TrendPoint[] } | null;
-  instagram: { latest_snapshot: { posts?:  PostStat[]  } | null; snapshots: TrendPoint[] } | null;
-}
-
-// ── Formatting ───────────────────────────────────────────────────────────────
-const gbp = (n: number) =>
-  n.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: n < 100 ? 2 : 0 });
-const gbpCompact = (n: number) =>
-  n >= 1_000_000 ? `£${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `£${(n / 1_000).toFixed(1)}K` : `£${Math.round(n)}`;
-const shortDate = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+import {
+  computeRoi, periodRange, PERIOD_LABELS, gbp, gbpCompact, fmtViews,
+  type AnalyticsData, type PeriodKey,
+} from "@/lib/roi";
 
 // ── Recharts theme bits (mirrors the Analytics page) ─────────────────────────
 const TOOLTIP_STYLE = {
@@ -40,6 +28,8 @@ const GRID_V = { strokeDasharray: "4 4", stroke: "var(--border)", horizontal: fa
 const BAR_CURSOR = { fill: "color-mix(in srgb, var(--foreground) 8%, transparent)" } as const;
 const LINE_CURSOR = { stroke: "var(--border)", strokeWidth: 1 } as const;
 const GREEN = "var(--chart-1)";
+
+const PERIODS: PeriodKey[] = ["30d", "month", "90d", "all"];
 
 function StatCard({ label, value, sub, icon: Icon }: {
   label: string; value: string; sub?: string; icon: LucideIcon;
@@ -64,19 +54,14 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-// Most-recent cumulative views <= t, carried forward so a missing platform
-// snapshot on a given day doesn't drop its lifetime total to zero.
-function lastAtOrBefore(pts: { t: number; views: number }[], t: number): number {
-  let v = 0;
-  for (const p of pts) { if (p.t <= t) v = p.views; else break; }
-  return v;
-}
-
 export default function RoiPage() {
   const { project } = useProject();
   const rate = project.value_per_1k_views;
+  const retainer = project.monthly_retainer;
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetch(`/api/projects/${project.id}/analytics`)
@@ -85,6 +70,34 @@ export default function RoiPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [project.id]);
+
+  const model = useMemo(() => {
+    if (rate === null || rate === undefined) return null;
+    const range = periodRange(period);
+    return computeRoi(data, { rate, retainer, ...range });
+  }, [data, rate, retainer, period]);
+
+  async function downloadReport() {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/roi-report?period=${period}`);
+      if (!res.ok) throw new Error("Report failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      a.href = url;
+      a.download = disposition.match(/filename="([^"]+)"/)?.[1] ?? "roi-report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Surfaced via the disabled state resetting; report route also viewable in-app.
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   // No rate yet → point the manager to Profile.
   if (rate === null || rate === undefined) {
@@ -104,52 +117,11 @@ export default function RoiPage() {
     );
   }
 
-  if (loading) {
+  if (loading || !model) {
     return <Card className="dark:bg-transparent"><CardContent className="py-6 text-sm text-muted-foreground">Loading…</CardContent></Card>;
   }
 
-  const ttSnaps = data?.tiktok?.snapshots ?? [];
-  const igSnaps = data?.instagram?.snapshots ?? [];
-  const ttVideos = data?.tiktok?.latest_snapshot?.videos ?? [];
-  const igPosts  = data?.instagram?.latest_snapshot?.posts ?? [];
-
-  const toMoney = (views: number) => (views / 1000) * rate;
-
-  // Cumulative value over time, combining both platforms by date (carry-forward).
-  const ttPts = ttSnaps.map((s) => ({ t: new Date(s.fetched_at).getTime(), views: s.views ?? 0 }));
-  const igPts = igSnaps.map((s) => ({ t: new Date(s.fetched_at).getTime(), views: s.views ?? 0 }));
-  const allT = Array.from(new Set([...ttPts, ...igPts].map((p) => p.t))).sort((a, b) => a - b);
-  const valueSeries = allT.map((t) => ({
-    date: shortDate(t),
-    value: toMoney(lastAtOrBefore(ttPts, t) + lastAtOrBefore(igPts, t)),
-  }));
-
-  // Value generated between each refresh (clamped at 0).
-  const perDay = valueSeries.slice(1).map((p, i) => ({
-    date: p.date,
-    value: Math.max(0, p.value - valueSeries[i].value),
-  }));
-
-  const totalValue = valueSeries.at(-1)?.value ?? 0;
-  const ttValue    = toMoney(ttSnaps.at(-1)?.views ?? 0);
-  const igValue    = toMoney(igSnaps.at(-1)?.views ?? 0);
-  const lastGain   = perDay.at(-1)?.value ?? 0;
-  const contentCount = ttVideos.length + igPosts.length;
-  const avgValue   = contentCount ? totalValue / contentCount : 0;
-
-  // Top earning content across both platforms.
-  const allContent = [
-    ...ttVideos.map((v) => ({ label: v.title || v.video_id, value: toMoney(v.views), platform: "TikTok" })),
-    ...igPosts.map((p)  => ({ label: p.caption || p.post_id, value: toMoney(p.views ?? 0), platform: "Instagram" })),
-  ].sort((a, b) => b.value - a.value);
-  const topContent = allContent.slice(0, 10).map((c, i) => ({
-    name: c.label ? (c.label.length > 26 ? c.label.slice(0, 26) + "…" : c.label) : `#${i + 1}`,
-    value: Math.round(c.value),
-  }));
-  const topEarner = allContent[0] ?? null;
-
-  const hasData = ttSnaps.length > 0 || igSnaps.length > 0;
-  if (!hasData) {
+  if (!model.hasData) {
     return (
       <Card className="dark:bg-transparent">
         <CardContent className="py-6 text-center text-sm text-muted-foreground">
@@ -159,23 +131,52 @@ export default function RoiPage() {
     );
   }
 
+  const { totalValue, totalViews, roiMultiple, avgValue, contentCount, topEarner, ttValue, igValue, valueSeries, perPeriod, topContent } = model;
+  const topChart = topContent.map((c, i) => ({
+    name: c.label ? (c.label.length > 26 ? c.label.slice(0, 26) + "…" : c.label) : `#${i + 1}`,
+    value: Math.round(c.value),
+  }));
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ROI</h1>
           <p className="text-sm text-muted-foreground">Estimated business value at {gbp(rate)} per 1,000 views.</p>
         </div>
-        <Link href={`/project/${project.id}/profile`}>
-          <Button variant="ghost" size="sm">Adjust rate</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button onClick={downloadReport} disabled={downloading} size="sm" className="gap-1.5">
+            <Download className="size-4" />{downloading ? "Generating…" : "Download PDF report"}
+          </Button>
+          <Link href={`/project/${project.id}/profile`}>
+            <Button variant="ghost" size="sm">Adjust rate</Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Period selector */}
+      <div className="flex flex-wrap gap-1.5">
+        {PERIODS.map((p) => (
+          <Button
+            key={p}
+            variant={period === p ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPeriod(p)}
+          >
+            {PERIOD_LABELS[p]}
+          </Button>
+        ))}
       </div>
 
       {/* Headline cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total value driven" value={gbp(totalValue)} sub="Across all tracked content" icon={PoundSterling} />
-        <StatCard label="Value since last refresh" value={gbp(lastGain)} sub={perDay.length ? "Most recent period" : "Need 2+ snapshots"} icon={TrendingUp} />
-        <StatCard label="Avg value / post" value={gbp(avgValue)} sub={`${contentCount} pieces tracked`} icon={Film} />
+        <StatCard label="Value driven" value={gbp(totalValue)} sub={PERIOD_LABELS[period]} icon={PoundSterling} />
+        {roiMultiple !== null ? (
+          <StatCard label="Return on retainer" value={`${roiMultiple.toFixed(1)}×`} sub={`on ${gbp(retainer!)}/mo`} icon={Gauge} />
+        ) : (
+          <StatCard label="Views driven" value={fmtViews(totalViews)} sub={PERIOD_LABELS[period]} icon={Eye} />
+        )}
+        <StatCard label="Avg value / post" value={gbp(avgValue)} sub={`${contentCount} pieces active`} icon={Film} />
         <StatCard label="Top earner" value={topEarner ? gbp(topEarner.value) : "—"} sub={topEarner ? topEarner.platform : undefined} icon={Trophy} />
       </div>
 
@@ -209,17 +210,17 @@ export default function RoiPage() {
       ) : (
         <Card className="dark:bg-transparent">
           <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            Once there are at least two snapshots, you&apos;ll see how value has accumulated over time.
+            Not enough snapshots in this period yet to chart value over time — try a wider range.
           </CardContent>
         </Card>
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Value generated per period */}
-        {perDay.length > 0 && (
+        {perPeriod.length > 0 && (
           <ChartCard title="Value generated per refresh">
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={perDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <BarChart data={perPeriod} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid {...GRID_H} />
                 <XAxis dataKey="date" tick={TICK} {...AXIS} />
                 <YAxis tickFormatter={gbpCompact} tick={TICK} width={52} {...AXIS} />
@@ -231,10 +232,10 @@ export default function RoiPage() {
         )}
 
         {/* Top content by value */}
-        {topContent.length > 0 && (
+        {topChart.length > 0 && (
           <ChartCard title="Top content by estimated value">
-            <ResponsiveContainer width="100%" height={Math.max(240, topContent.length * 34)}>
-              <BarChart layout="vertical" data={topContent} margin={{ left: 0, right: 12 }}>
+            <ResponsiveContainer width="100%" height={Math.max(240, topChart.length * 34)}>
+              <BarChart layout="vertical" data={topChart} margin={{ left: 0, right: 12 }}>
                 <CartesianGrid {...GRID_V} />
                 <XAxis type="number" tickFormatter={gbpCompact} tick={TICK} {...AXIS} />
                 <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} {...AXIS} />

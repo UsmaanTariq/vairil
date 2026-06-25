@@ -31,6 +31,7 @@ export async function PATCH(
     tiktok_handle: rawTikTok,
     instagram_handle: rawInstagram,
     value_per_1k_views: rawRpm,
+    monthly_retainer: rawRetainer,
     ...rest
   } = body;
 
@@ -44,6 +45,11 @@ export async function PATCH(
   if (rawRpm !== undefined) {
     const n = rawRpm === null || rawRpm === '' ? null : Number(rawRpm);
     updatePayload.value_per_1k_views = n !== null && Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  // Monthly retainer the client pays — empty/invalid clears it, negatives are rejected.
+  if (rawRetainer !== undefined) {
+    const n = rawRetainer === null || rawRetainer === '' ? null : Number(rawRetainer);
+    updatePayload.monthly_retainer = n !== null && Number.isFinite(n) && n >= 0 ? n : null;
   }
 
   const { data, error } = await supabase

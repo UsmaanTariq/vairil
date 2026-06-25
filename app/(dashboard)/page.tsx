@@ -355,7 +355,7 @@ export default function DashboardPage() {
         {/* KPI grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Combined views"
+            label="Views gained"
             value={kpis ? fmt(kpis.views.today) ?? String(kpis.views.today) : null}
             deltaPct={kpis?.views.delta_pct ?? null}
             icon={Eye}
@@ -394,7 +394,7 @@ export default function DashboardPage() {
                 <CardTitle className="font-mono text-2xl tabular-nums">
                   {formatInteger(latestCumulative)}
                 </CardTitle>
-                <CardDescription>Cumulative views (TikTok + Instagram)</CardDescription>
+                <CardDescription>Views gained since tracking started (TikTok + Instagram)</CardDescription>
               </div>
               {kpis?.views.delta_pct != null && (
                 <Delta value={kpis.views.delta_pct} variant="badge">
@@ -439,7 +439,7 @@ export default function DashboardPage() {
           <Card className="lg:col-span-1 dark:bg-transparent">
             <CardHeader>
               <CardTitle>Views by client</CardTitle>
-              <CardDescription>Share of total views per project.</CardDescription>
+              <CardDescription>Share of views gained per project.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {viewsBreakdown.length > 0 ? (

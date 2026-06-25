@@ -13,6 +13,7 @@ export type Project = {
   tiktok_handle: string | null;
   instagram_handle: string | null;
   value_per_1k_views: number | null;
+  monthly_retainer: number | null;
 };
 
 type Ctx = {
