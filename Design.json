@@ -1,0 +1,325 @@
+{
+    "meta": {
+      "name": "Soft Light Dashboard",
+      "intent": "Design system profile for replicating a clean, card-based SaaS/admin dashboard aesthetic. Feed this to Cursor as context so generated UI matches a consistent visual style.",
+      "target_stack": "React / Next.js + Tailwind CSS",
+      "theme": "light",
+      "density": "comfortable",
+      "personality": ["friendly", "modern", "rounded", "soft", "uncluttered"]
+    },
+  
+    "color": {
+      "note": "Values are approximations sampled from the reference. Tune to brand. Use the accent for primary actions, charts, active states, and progress.",
+      "background": {
+        "app": "#E9EBF0",
+        "surface": "#FFFFFF",
+        "surfaceMuted": "#F5F6FA",
+        "surfaceInset": "#F0F1F6"
+      },
+      "accent": {
+        "primary": "#6C5CE7",
+        "primaryHover": "#5B4BD6",
+        "primarySoft": "#EEEBFC",
+        "onPrimary": "#FFFFFF"
+      },
+      "gradients": {
+        "heroBanner": {
+          "type": "linear",
+          "angle": "120deg",
+          "stops": ["#7B68F0", "#6C5CE7", "#5A48D6"],
+          "usage": "Large feature/hero card background"
+        }
+      },
+      "text": {
+        "primary": "#1B1B2F",
+        "secondary": "#6B6B80",
+        "muted": "#9A9AAE",
+        "onAccent": "#FFFFFF",
+        "onDark": "#FFFFFF"
+      },
+      "neutralButton": {
+        "bg": "#1B1B2F",
+        "hover": "#2A2A40",
+        "text": "#FFFFFF"
+      },
+      "feedback": {
+        "danger": "#F25C5C",
+        "success": "#3DBE7A",
+        "warning": "#F0A33F",
+        "info": "#5C9DF2"
+      },
+      "tagChips": {
+        "note": "Chips use a soft tinted bg with a saturated text color of the same hue.",
+        "examples": [
+          { "bg": "#EEEBFC", "text": "#6C5CE7" },
+          { "bg": "#E6F6EE", "text": "#3DBE7A" },
+          { "bg": "#FDEFE6", "text": "#F0A33F" }
+        ]
+      },
+      "border": {
+        "subtle": "#ECEDF2",
+        "divider": "#F0F1F5"
+      }
+    },
+  
+    "typography": {
+      "fontFamily": {
+        "primary": "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif",
+        "fallbackNote": "Geometric/humanist sans with slightly rounded terminals. Inter or Poppins are acceptable substitutes."
+      },
+      "scale": {
+        "displayHero": { "size": "30px", "weight": 700, "lineHeight": 1.2 },
+        "h1": { "size": "22px", "weight": 700, "lineHeight": 1.3 },
+        "sectionTitle": { "size": "18px", "weight": 600, "lineHeight": 1.3 },
+        "cardTitle": { "size": "15px", "weight": 600, "lineHeight": 1.35 },
+        "body": { "size": "14px", "weight": 400, "lineHeight": 1.5 },
+        "label": { "size": "13px", "weight": 500, "lineHeight": 1.4 },
+        "caption": { "size": "12px", "weight": 400, "lineHeight": 1.4 },
+        "navGroupLabel": { "size": "11px", "weight": 600, "lineHeight": 1.4, "letterSpacing": "0.08em", "transform": "uppercase", "color": "muted" }
+      }
+    },
+  
+    "spacing": {
+      "baseUnit": "4px",
+      "scale": [4, 8, 12, 16, 20, 24, 32, 40, 48],
+      "cardPadding": "24px",
+      "cardPaddingCompact": "16px",
+      "sectionGap": "24px",
+      "itemGap": "16px",
+      "inlineGap": "8px"
+    },
+  
+    "radius": {
+      "note": "Heavy rounding is core to this style. Cards are large-radius; pills are fully round.",
+      "sm": "8px",
+      "md": "12px",
+      "lg": "16px",
+      "xl": "20px",
+      "card": "24px",
+      "pill": "999px"
+    },
+  
+    "shadow": {
+      "note": "Shadows are soft, diffuse, low-opacity. Avoid hard or dark shadows.",
+      "card": "0 8px 24px rgba(27, 27, 47, 0.05)",
+      "cardHover": "0 12px 32px rgba(27, 27, 47, 0.08)",
+      "floating": "0 6px 16px rgba(27, 27, 47, 0.06)",
+      "iconButton": "0 2px 8px rgba(27, 27, 47, 0.04)"
+    },
+  
+    "iconography": {
+      "style": "line / outline",
+      "weight": "1.5px stroke",
+      "size": { "nav": "20px", "inline": "16px", "button": "18px" },
+      "corners": "rounded",
+      "recommendedSet": "lucide-react or phosphor (regular weight)"
+    },
+  
+    "layout": {
+      "shell": {
+        "type": "three-column",
+        "columns": [
+          { "role": "sidebar", "width": "240px", "fixed": true },
+          { "role": "main", "width": "fluid", "minWidth": "520px" },
+          { "role": "rightRail", "width": "320px", "fixed": true, "collapseBelow": "1280px" }
+        ],
+        "outerPadding": "24px",
+        "columnGap": "24px",
+        "maxWidth": "1440px"
+      },
+      "grid": {
+        "system": "flex + CSS grid",
+        "contentCards": { "type": "grid", "minItemWidth": "200px", "gap": "16px" },
+        "statCards": { "type": "grid", "columns": 3, "gap": "16px" }
+      }
+    },
+  
+    "components": {
+      "sidebar": {
+        "bg": "surface",
+        "radius": "card",
+        "padding": "24px 16px",
+        "structure": [
+          "logo (icon mark + wordmark) at top",
+          "grouped nav sections, each with an uppercase muted group label",
+          "nav items: leading icon + label",
+          "settings/footer group pinned lower"
+        ],
+        "navItem": {
+          "height": "44px",
+          "padding": "0 16px",
+          "radius": "md",
+          "default": { "icon": "text.secondary", "label": "text.secondary", "bg": "transparent" },
+          "active": { "icon": "accent.primary", "label": "accent.primary", "weight": 600, "indicator": "left accent bar OR soft accent bg" },
+          "hover": { "bg": "surfaceMuted" }
+        },
+        "friendsList": "avatar + name + small muted subtitle row",
+        "destructiveItem": "logout uses feedback.danger color"
+      },
+  
+      "topBar": {
+        "structure": "search input (left, grows) + icon buttons (mail/notifications) + user chip (avatar + name)",
+        "searchInput": {
+          "radius": "pill",
+          "bg": "surface",
+          "height": "44px",
+          "leadingIcon": true,
+          "placeholderColor": "text.muted"
+        },
+        "iconButton": {
+          "shape": "circle",
+          "size": "44px",
+          "bg": "surface",
+          "shadow": "iconButton"
+        }
+      },
+  
+      "heroBanner": {
+        "bg": "gradients.heroBanner",
+        "radius": "card",
+        "padding": "32px",
+        "textColor": "onAccent",
+        "structure": "eyebrow label + large heading + primary CTA, with decorative sparkle/graphic on the right",
+        "cta": {
+          "variant": "neutralButton",
+          "shape": "pill",
+          "trailingIcon": "arrow in circle"
+        }
+      },
+  
+      "statCard": {
+        "bg": "surface",
+        "radius": "lg",
+        "padding": "16px",
+        "structure": "rounded icon tile (soft tinted bg) + progress text (muted) + category label (semibold) + overflow menu dots",
+        "iconTile": { "size": "44px", "radius": "md", "bg": "accent.primarySoft", "iconColor": "accent.primary" }
+      },
+  
+      "sectionHeader": {
+        "structure": "section title (left) + action on right ('See all' link OR carousel arrow buttons)",
+        "seeAllLink": { "color": "accent.primary", "size": "label" },
+        "carouselArrows": { "shape": "circle", "size": "32px", "bg": "surfaceMuted", "activeBg": "accent.primary" }
+      },
+  
+      "contentCard": {
+        "bg": "surface",
+        "radius": "lg",
+        "padding": "12px",
+        "structure": [
+          "media thumbnail (radius md) with floating favorite/bookmark icon top-right",
+          "category chip (tag)",
+          "title (cardTitle, max 2 lines)",
+          "footer divider then author row: small avatar + name + muted role"
+        ],
+        "thumbnail": { "radius": "md", "aspectRatio": "16/10" },
+        "favoriteIcon": { "shape": "circle", "bg": "rgba(255,255,255,0.9)", "size": "28px", "position": "absolute top-right" }
+      },
+  
+      "tableList": {
+        "bg": "surface",
+        "radius": "card",
+        "structure": "column header row (muted uppercase-ish labels) + data rows",
+        "row": {
+          "height": "56px",
+          "divider": "border.divider",
+          "cells": ["avatar + name + sub", "type chip", "description text", "trailing action icon (circle button)"]
+        }
+      },
+  
+      "chip": {
+        "shape": "pill",
+        "padding": "4px 10px",
+        "size": "caption",
+        "weight": 500,
+        "style": "soft tinted bg + same-hue text (see color.tagChips)",
+        "optionalLeadingIcon": true
+      },
+  
+      "rightRail": {
+        "statisticCard": {
+          "bg": "surface",
+          "radius": "card",
+          "structure": "avatar with circular progress ring + percentage badge, greeting heading, sub line, then a bar chart",
+          "progressRing": { "track": "surfaceInset", "fill": "accent.primary", "badge": "accent.primary pill with onAccent text" },
+          "barChart": {
+            "style": "rounded-top bars, grouped",
+            "activeBar": "accent.primary",
+            "inactiveBar": "accent.primarySoft",
+            "gridlines": "very subtle horizontal, muted",
+            "axisLabels": "caption, muted"
+          }
+        },
+        "mentorList": {
+          "structure": "section title + add button, then rows of avatar + name + role + Follow button",
+          "followButton": {
+            "variant": "outline",
+            "shape": "pill",
+            "border": "border.subtle",
+            "text": "text.primary",
+            "leadingIcon": "plus or person"
+          },
+          "footerAction": "full-width soft 'See All' button (bg surfaceMuted)"
+        }
+      },
+  
+      "buttons": {
+        "primary": { "bg": "accent.primary", "text": "onAccent", "radius": "pill", "height": "44px", "padding": "0 20px", "hover": "accent.primaryHover" },
+        "neutralDark": { "bg": "neutralButton.bg", "text": "onDark", "radius": "pill", "height": "44px" },
+        "outline": { "bg": "transparent", "border": "border.subtle", "text": "text.primary", "radius": "pill" },
+        "soft": { "bg": "surfaceMuted", "text": "text.primary", "radius": "md" },
+        "iconCircle": { "shape": "circle", "bg": "surface", "shadow": "iconButton" }
+      },
+  
+      "avatar": {
+        "shapes": ["circle"],
+        "sizes": { "sm": "28px", "md": "36px", "lg": "44px" },
+        "optionalStatusDot": true,
+        "optionalProgressRing": true
+      }
+    },
+  
+    "patterns_and_rules": {
+      "do": [
+        "Float every grouping inside white cards on a light grey-blue canvas",
+        "Use generous padding and whitespace; let content breathe",
+        "Keep one saturated accent (violet) — everything else is neutral or soft-tinted",
+        "Use large corner radii consistently; pills for all interactive controls",
+        "Use soft, diffuse, low-opacity shadows for elevation instead of borders where possible",
+        "Use soft-tinted icon tiles and chips that echo the accent or a feedback hue",
+        "Round the tops of chart bars; mute inactive data with the soft accent tint"
+      ],
+      "dont": [
+        "Don't use hard 1px borders as the primary separation method (prefer shadow + spacing)",
+        "Don't introduce multiple competing saturated colors",
+        "Don't use sharp corners or square buttons",
+        "Don't use dark/heavy drop shadows",
+        "Don't crowd elements; avoid dense data-table styling"
+      ],
+      "elevation_logic": "App canvas (lowest) -> cards (shadow.card) -> floating controls/popovers (shadow.floating) -> hover lifts (shadow.cardHover).",
+      "states": {
+        "hover": "Slight shadow increase and/or surfaceMuted bg",
+        "active/selected": "Accent text + accent indicator or primarySoft bg",
+        "disabled": "Reduce opacity to ~0.5, remove shadow"
+      }
+    },
+  
+    "tailwind_hints": {
+      "note": "Suggested mappings so Cursor outputs consistent utility classes.",
+      "colors": {
+        "bg-app": "#E9EBF0",
+        "bg-surface": "#FFFFFF",
+        "accent": "#6C5CE7",
+        "accent-soft": "#EEEBFC",
+        "ink": "#1B1B2F",
+        "ink-muted": "#9A9AAE"
+      },
+      "radius": { "rounded-card": "24px", "rounded-pill": "999px" },
+      "shadow": { "shadow-card": "0 8px 24px rgba(27,27,47,0.05)" },
+      "commonClasses": {
+        "card": "bg-white rounded-[24px] p-6 shadow-[0_8px_24px_rgba(27,27,47,0.05)]",
+        "primaryButton": "bg-[#6C5CE7] text-white rounded-full h-11 px-5 font-medium hover:bg-[#5B4BD6]",
+        "chip": "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+        "navItemActive": "flex items-center gap-3 h-11 px-4 rounded-xl text-[#6C5CE7] font-semibold"
+      }
+    }
+  }

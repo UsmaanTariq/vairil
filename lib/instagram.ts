@@ -16,6 +16,8 @@ export interface InstagramPostStat {
   created_at:      number | null; // unix seconds the post was published
 }
 
+import { fetchJsonWithRetry } from './rapidapi';
+
 const BASE = `https://${process.env.RAPIDAPI_INSTAGRAM_HOST}`;
 const HEADERS = {
   'x-rapidapi-key':  process.env.RAPIDAPI_KEY!,
@@ -23,12 +25,7 @@ const HEADERS = {
 };
 
 async function fetchNumericId(handle: string): Promise<string> {
-  const res = await fetch(`${BASE}/search?query=${encodeURIComponent(handle)}`, { headers: HEADERS });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Instagram search failed (${res.status}): ${body}`);
-  }
-  const json = await res.json();
+  const json = await fetchJsonWithRetry(`${BASE}/search?query=${encodeURIComponent(handle)}`, HEADERS, { label: `Instagram search ${handle}` });
   const users: Array<{ user: { username: string; pk: string } }> = json.users ?? [];
   const match = users.find((u) => u.user.username.toLowerCase() === handle.toLowerCase());
   if (!match) throw new Error(`Instagram user not found: ${handle}`);
@@ -36,12 +33,7 @@ async function fetchNumericId(handle: string): Promise<string> {
 }
 
 async function fetchProfileData(userId: string): Promise<Record<string, unknown>> {
-  const res = await fetch(`${BASE}/profile?id=${encodeURIComponent(userId)}`, { headers: HEADERS });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Instagram profile fetch failed (${res.status}): ${body}`);
-  }
-  return res.json();
+  return fetchJsonWithRetry(`${BASE}/profile?id=${encodeURIComponent(userId)}`, HEADERS, { label: 'Instagram profile' });
 }
 
 export async function getProfile(handle: string): Promise<InstagramProfile> {
@@ -68,10 +60,14 @@ export async function getPosts(userId: string): Promise<InstagramPostStat[]> {
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = `${BASE}/user-feeds?id=${encodeURIComponent(userId)}&count=50` +
                 (maxId ? `&max_id=${encodeURIComponent(maxId)}` : '');
-    const res = await fetch(url, { headers: HEADERS });
-    // On a bad page, keep whatever we've collected rather than discarding everything.
-    if (!res.ok) break;
-    const json = await res.json();
+    let json;
+    try {
+      json = await fetchJsonWithRetry(url, HEADERS, { label: 'Instagram feed' });
+    } catch (err) {
+      // Page 0 failing → nothing to store; surface it. Later pages → keep partial.
+      if (page === 0) throw err;
+      break;
+    }
     const items: Record<string, unknown>[] = json.items ?? [];
     allItems.push(...items);
     if (!json.more_available || items.length === 0 || !json.next_max_id) break;

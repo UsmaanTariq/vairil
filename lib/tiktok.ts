@@ -17,6 +17,8 @@ export interface TikTokVideoStat {
   created_at:      number | null; // unix seconds the video was posted
 }
 
+import { fetchJsonWithRetry } from './rapidapi';
+
 const BASE = `https://${process.env.RAPIDAPI_TIKTOK_HOST}`;
 const HEADERS = {
   'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
@@ -24,14 +26,11 @@ const HEADERS = {
 };
 
 export async function getProfile(handle: string): Promise<TikTokProfile> {
-  const res = await fetch(`${BASE}/api/user/info?uniqueId=${encodeURIComponent(handle)}`, {
-    headers: HEADERS,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`TikTok profile fetch failed (${res.status}): ${body}`);
-  }
-  const json = await res.json();
+  const json = await fetchJsonWithRetry(
+    `${BASE}/api/user/info?uniqueId=${encodeURIComponent(handle)}`,
+    HEADERS,
+    { label: `TikTok profile ${handle}` },
+  );
   const user  = json.userInfo?.user  ?? {};
   const stats = json.userInfo?.stats ?? {};
   return {
@@ -48,13 +47,19 @@ export async function getVideos(secUid: string): Promise<TikTokVideoStat[]> {
   const MAX_PAGES = 30;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(
-      `${BASE}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=35&cursor=${cursor}`,
-      { headers: HEADERS }
-    );
-    // On a bad page, return whatever we have rather than discarding everything
-    if (!res.ok) break;
-    const json = await res.json();
+    let json;
+    try {
+      json = await fetchJsonWithRetry(
+        `${BASE}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=35&cursor=${cursor}`,
+        HEADERS,
+        { label: 'TikTok posts' },
+      );
+    } catch (err) {
+      // Page 0 failing means we have nothing — surface it so no empty snapshot is
+      // stored. Later pages failing: keep what we already collected.
+      if (page === 0) throw err;
+      break;
+    }
     const items: Record<string, unknown>[] = json.data?.itemList ?? [];
     allItems.push(...items);
     if (!json.data?.hasMore || items.length === 0) break;
